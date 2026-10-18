@@ -15,3 +15,4 @@ test-results/
 next-env.d.ts
 .env*.local
 apps/web/public/pkg/
+.claude/
