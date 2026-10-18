@@ -28,13 +28,19 @@ Contract with the skills (see hermes/skills/sdlc-orchestrator/SKILL.md, "Project
     a `project` field on the turn_start event, which lets the bridge map a session even if Hermes
     did not use the session id the bridge asked for.
 
+Devin: when DEVIN_API_KEY is set in ~/.hermes/.env (optional DEVIN_ORG_ID) the bridge also runs the Devin poller
+(hermes/devin/devin_poller.py, installed next to this file) at most every 30 seconds. The poller reads
+~/.hermes/platform/devin_sessions.json, which the sdlc-development skill appends to. Its `devin_status` events are sent to
+`platform_ingest`, and each Devin session is mapped to its project with `platform_map_session`. An unreachable Devin never stops
+the bridge: the poll is skipped, retried later with a longer wait, and logged once.
+
 Usage limits: a run that fails with a Claude usage/rate limit message pauses the project (status
 `paused`) and is retried after a back-off (default 30 minutes, or the time the message gives).
 
 Settings: ~/.hermes/platform/config.json (supabase_url, supabase_key, write_key, and optional
 poll_seconds, backoff_minutes, auto_wait_seconds, auto_max_steps, github_owner, template_repo,
-devin_max_acu, hermes_api, auto_approve_commands) and the Hermes API server key from ~/.hermes/.env
-(API_SERVER_KEY). Environment variables HERMES_PLATFORM_* override the file (used by the tests).
+devin_max_acu, devin_poll_seconds, hermes_api, auto_approve_commands) and the Hermes API server key from ~/.hermes/.env
+(API_SERVER_KEY), and the optional DEVIN_API_KEY / DEVIN_ORG_ID. Environment variables HERMES_PLATFORM_* override the file (used by the tests).
 
     platform_bridge.py            run forever
     platform_bridge.py --check    check the settings, Supabase and Hermes once, then exit (0 = fine)
@@ -43,6 +49,7 @@ devin_max_acu, hermes_api, auto_approve_commands) and the Hermes API server key 
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -220,6 +227,11 @@ def load_settings(home: Optional[Path] = None, need_secrets: bool = True) -> dic
         "github_owner": pick("HERMES_PLATFORM_GITHUB_OWNER", "github_owner", ""),
         "template_repo": pick("HERMES_PLATFORM_TEMPLATE_REPO", "template_repo", ""),
         "devin_max_acu": pick("HERMES_PLATFORM_DEVIN_MAX_ACU", "devin_max_acu", ""),
+        # Devin polling is on only when a key exists. The .env file wins over the process environment.
+        "devin_key": (env.get("DEVIN_API_KEY") or os.environ.get("DEVIN_API_KEY") or "").strip(),
+        "devin_org": (env.get("DEVIN_ORG_ID") or os.environ.get("DEVIN_ORG_ID") or "").strip(),
+        "devin_base": os.environ.get("DEVIN_API_BASE") or "",
+        "devin_interval": max(1.0, num("HERMES_PLATFORM_DEVIN_INTERVAL", "devin_poll_seconds", DEVIN_INTERVAL)),
     }
     if need_secrets:
         missing = [k for k in ("supabase_url", "supabase_key", "write_key", "api_key") if not s[k]]
@@ -282,6 +294,23 @@ def is_usage_limit(status: str, text: str) -> bool:
     return True
 
 
+DEVIN_INTERVAL = 30.0  # seconds between two Devin polls
+DEVIN_MAX_DELAY = 300.0  # the wait grows up to this while Devin does not answer
+
+
+def load_devin_poller():
+    """The poller module: installed next to the bridge (~/.hermes/platform/devin_poller.py) or, in the repository, in ../devin."""
+    here = Path(__file__).resolve().parent
+    for folder in (here, here.parent / "devin"):
+        f = folder / "devin_poller.py"
+        if f.is_file():
+            spec = importlib.util.spec_from_file_location("hermes_platform_devin_poller", f)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod
+    raise ImportError("devin_poller.py was not found next to the bridge")
+
+
 def iso_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -300,6 +329,13 @@ class Bridge:
         except Exception:
             pass
         self.stop_flag = False
+        self.devin = None  # the DevinPoller, only when a Devin key is configured
+        self.devin_mod = None
+        self.devin_next = 0.0
+        self.devin_delay = float(s.get("devin_interval") or DEVIN_INTERVAL)
+        self.devin_failed = False  # a Devin request failed in the current poll
+        self.devin_said: Optional[str] = None
+        self.setup_devin()
 
     # ---- convenience ----------------------------------------------------------------------
     @property
@@ -375,6 +411,8 @@ class Bridge:
                                                        "note": item.get("note"), "run_id": item.get("run_id")})
                 elif key.startswith("map:"):
                     self.rpc("platform_map_session", {"write_key": self.wk(), **item})
+                elif key.startswith("ev:"):
+                    self.rpc("platform_ingest", {"write_key": self.wk(), "events": [item["event"]]})
                 del box[key]
             except RpcError as e:
                 if e.retryable:
@@ -486,6 +524,83 @@ class Bridge:
         if fields:
             self.set_project(P["id"], **fields)
         return st
+
+    # ---- Devin (optional) ----------------------------------------------------------------------------------
+    def setup_devin(self):
+        key = self.s.get("devin_key")
+        if not key:
+            return
+        try:
+            self.devin_mod = mod = load_devin_poller()
+            self.devin = mod.DevinPoller(
+                key, self.data / "devin_sessions.json", self.on_devin_event,
+                base_url=self.s.get("devin_base") or mod.DEFAULT_BASE_URL, org_id=self.s.get("devin_org") or None,
+                is_active=self.devin_project_active, state_file=self.data / "devin_poller_state.json", timeout=8.0,
+                log=lambda *a: self.devin_log(" ".join(str(x) for x in a)), now=self.now)
+            plain = self.devin.fetch
+
+            def guarded_fetch(session_id: str):
+                if self.devin_failed:  # Devin did not answer a moment ago: do not wait for every other session as well
+                    raise mod.DevinError("Devin is not answering, will try again later", 0)
+                try:
+                    return plain(session_id)
+                except mod.DevinError as e:
+                    if e.code != 404:
+                        self.devin_failed = True
+                    raise
+
+            self.devin.fetch = guarded_fetch
+            log("Devin polling is on (every", int(self.s.get("devin_interval") or DEVIN_INTERVAL), "s)")
+        except Exception as e:  # a missing or broken poller must never stop the bridge
+            self.devin = None
+            log("Devin polling is off:", type(e).__name__, clip(e, 120))
+
+    def devin_log(self, msg: str):
+        if msg != self.devin_said:  # each problem once, not every poll
+            self.devin_said = msg
+            log("devin:", clip(msg, 200))
+
+    def devin_project_active(self, pid: str) -> bool:
+        P = self.project(pid)
+        active = getattr(self.devin_mod, "ACTIVE_PROJECT_STATUSES", None) or ACTIVE_STATUSES | {"paused"}
+        return bool(P and P.get("status") in active)
+
+    def on_devin_event(self, ev: dict):
+        """Called by the poller for each change. Maps the Devin session to its project and queues the event for platform_ingest."""
+        pid = ev.get("project")
+        if not (isinstance(pid, str) and self.project(pid)):
+            pid = self.state.get("slot")  # a session written without a project id belongs to the project that is running
+            if not (pid and self.project(pid)):
+                raise RuntimeError("no project for this Devin session yet")  # the poller tries again next time
+        sid = str(ev.get("sid") or ev.get("session_id") or "")
+        if not sid:
+            return
+        if self.state["sessions"].get(sid) != pid:
+            self.map_session(sid, pid, role="devin")
+        n = int(self.state.get("devin_seq", 0)) + 1
+        self.state["devin_seq"] = n
+        out = dict(ev)
+        out["project"] = pid
+        out["sid"] = sid
+        self.state["outbox"][f"ev:{n:08d}"] = {"event": out}
+        log("devin session", sid[:14], "->", ev.get("status"), "for project", pid[:8])
+
+    def poll_devin(self):
+        if not self.devin:
+            return
+        t = self.now()
+        if t < self.devin_next:
+            return
+        base = float(self.s.get("devin_interval") or DEVIN_INTERVAL)
+        self.devin_failed = False
+        try:
+            self.devin.poll_once()
+        except Exception as e:
+            self.devin_failed = True
+            self.devin_log(f"poll failed: {type(e).__name__}")
+        # a failed round makes the wait longer (up to 5 minutes); a good round puts it back
+        self.devin_delay = min(DEVIN_MAX_DELAY, self.devin_delay * 2) if self.devin_failed else base
+        self.devin_next = self.now() + self.devin_delay
 
     # ---- events from the plugin ------------------------------------------------------------------
     def ingest_events(self):
@@ -1028,6 +1143,7 @@ class Bridge:
         if new:
             self.save()  # the orders are claimed in the database; never lose them
         self.ingest_events()
+        self.poll_devin()
         self.poll_active()
         self.schedule()
         self.refresh_queue_marks()
@@ -1066,6 +1182,11 @@ def check(s: dict) -> int:
     else:
         ok = False
         print(f"FAIL the Hermes API server answered {code} on /health (is API_SERVER_ENABLED=true and the gateway running?)")
+    if s.get("devin_key"):
+        if b.devin:
+            print("ok   Devin polling is on (the key is not shown)")
+        else:
+            print("note Devin key found, but the Devin poller could not start (devin_poller.py missing?). The bridge works without it.")
     return 0 if ok else 1
 
 
