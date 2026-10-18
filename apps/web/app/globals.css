@@ -116,3 +116,9 @@ body {
 .prose-brd table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
 .prose-brd th,
 .prose-brd td { border: 1px solid var(--line-strong); padding: 0.3rem 0.6rem; text-align: left; }
+
+/* Focus ring on the dark header: use Snow so it stays visible */
+[data-surface="header"] :focus-visible,
+[data-surface="brand-panel"] :focus-visible {
+  outline-color: var(--snow);
+}
