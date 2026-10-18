@@ -1,6 +1,6 @@
 ---
 name: sdlc-review
-description: Reviewer for the development pull requests. Use when task pull requests are open. Checks each one against the plan and contract, requires green checks, blocks on secrets or vulnerabilities, asks for changes with clear feedback, and merges approved pull requests. At most three rework rounds.
+description: Reviewer for the development pull requests. Use when task pull requests are open. Checks each one against the plan and contract, requires green checks, blocks on secrets or vulnerabilities, posts its verdict as a pull request comment, asks for changes with clear feedback, and merges approved pull requests with green checks. At most three rework rounds.
 ---
 
 # SDLC Review
@@ -31,19 +31,31 @@ Read the whole diff looking for:
 
 ### 3. Decide
 
+All agents use one GitHub account, and GitHub does not let an account approve its own pull request.
+So `gh pr review --approve` and `--request-changes` fail. **Never use them.** Post your verdict as a
+**comment** on the pull request instead. The **first line** of the comment is the verdict, written
+exactly like this (the website and the platform read that line):
+
+- `Review: approved`
+- `Review: changes requested`
+
 **Approve** when everything above is fine:
 
 ```text
-gh pr review <number> --approve --body "Looks good. Checked: contract, requirements <list>, tests, security."
+gh pr comment <number> --body "Review: approved
+Checked: contract, requirements <list>, tests, security. CI is green."
 ```
 
 **Request changes** when something is wrong. Feedback must be actionable. For each problem say:
 where (file and line), what is wrong, and what to do instead.
 
 ```text
-gh pr review <number> --request-changes --body "1. src/tip.ts line 12: totals are not rounded (NFR-02). Round to 2 decimals. 2. ..."
+gh pr comment <number> --body "Review: changes requested
+1. src/tip.ts line 12: totals are not rounded (NFR-02). Round to 2 decimals.
+2. ..."
 ```
 
+Write the whole comment in one `--body "..."` argument. Do not put anything before the verdict line.
 Do not request style changes that the linter does not enforce, unless they hurt readability a lot.
 
 ### 4. Rework rounds
@@ -57,14 +69,23 @@ Do not request style changes that the linter does not enforce, unless they hurt 
 
 ### 5. Merge
 
-Merge **approved** pull requests with a squash merge and delete the branch:
+Merge a pull request **only when both are true**: the checks are green and your verdict comment says
+`Review: approved`. Look at the checks right before you merge:
+
+```text
+gh pr checks <number>
+```
+
+If any check is red, pending or missing, do not merge. Wait for it, or ask for a fix. Then merge with a
+squash merge and delete the branch:
 
 ```text
 gh pr merge <number> --squash --delete-branch
 ```
 
 Merge them one at a time. After each merge, if another approved pull request now conflicts, ask its
-coder to rebase and push, then check the checks again before merging it.
+coder to rebase and push, then check the checks again before merging it (and post a new verdict if the
+code changed).
 
 When all pull requests are merged, make sure the checks on `main` are green. If `main` is red,
 that is the next thing to fix: ask for a fix pull request and review it first.
@@ -76,6 +97,7 @@ You are done when every task pull request is merged and `main` is green. Tell th
 ## Do not
 
 - Do not approve a pull request with red checks, even if "it is only a small thing".
+- Do not use `gh pr review --approve` or `--request-changes`. They fail on a pull request from the same account. Use `gh pr comment`.
 - Do not edit the coder's code yourself. Ask for changes.
 - Do not merge your own pull request.
 - Do not ask the user to approve anything. The user's one approval was the BRD.

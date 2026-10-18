@@ -374,13 +374,13 @@ def _tokens(cmd: str) -> List[str]:
         return cmd.split()
 
 
-def _gh_comment_parts(cmd: str) -> List[Tuple[Optional[str], str]]:
-    """All `gh issue comment [N] --body ...` calls in a command, as (issue number, body)."""
+def _gh_comment_parts(cmd: str, kind: str = "issue") -> List[Tuple[Optional[str], str]]:
+    """All `gh issue comment [N] --body ...` (or, with kind="pr", `gh pr comment`) calls in a command, as (number, body)."""
     toks = _tokens(cmd)
     out: List[Tuple[Optional[str], str]] = []
     i = 0
     while i < len(toks):
-        if toks[i] == "gh" and toks[i + 1 : i + 3] == ["issue", "comment"]:
+        if toks[i] == "gh" and toks[i + 1 : i + 3] == [kind, "comment"]:
             j = i + 3
             number: Optional[str] = None
             body = ""
@@ -396,7 +396,7 @@ def _gh_comment_parts(cmd: str) -> List[Tuple[Optional[str], str]]:
                 elif number is None and re.fullmatch(r"#?\d+", t):
                     number = t.lstrip("#")
                 elif number is None:
-                    m = re.search(r"/issues/(\d+)", t)
+                    m = re.search(r"/(?:issues|pull)/(\d+)", t)
                     if m:
                         number = m.group(1)
                 j += 1
@@ -408,6 +408,24 @@ def _gh_comment_parts(cmd: str) -> List[Tuple[Optional[str], str]]:
         else:
             i += 1
     return out
+
+
+# The Reviewer cannot approve with `gh pr review` (all agents share one GitHub account), so its verdict is a pull request
+# comment whose first line is "Review: approved" or "Review: changes requested" (see hermes/skills/sdlc-review).
+_REVIEW_VERDICT_RE = re.compile(
+    r"^\W*review\s*[:\-]\s*(approved?|changes?[\s_-]*requested|request(?:ed)?[\s_-]*changes|changes)\b", re.I
+)
+
+
+def parse_review_verdict(body: str) -> Tuple[Optional[str], str]:
+    """(verdict, rest) from a pull request comment: verdict is "approved", "changes" or None; rest is the text after the first line."""
+    text = (body or "").strip()
+    first, _, rest = text.partition("\n")
+    m = _REVIEW_VERDICT_RE.match(first.strip())
+    if not m:
+        return None, text
+    word = m.group(1).lower()
+    return ("approved" if word.startswith("approve") else "changes"), (rest.strip() or first[m.end():].strip(" .:-"))
 
 
 def parse_sync_body(body: str) -> Dict[str, Any]:
@@ -452,6 +470,7 @@ def classify_terminal(cmd: str) -> List[Dict[str, Any]]:
             if number:
                 a["issue"] = number
             actions.append(a)
+    pr_comments = [b for _, b in _gh_comment_parts(cmd, "pr")]  # quote-aware: a comment body can have several lines
     for part in re.split(r"\s*(?:&&|\|\||;|\n)\s*", cmd):
         p = part.strip()
         if not p:
@@ -473,7 +492,9 @@ def classify_terminal(cmd: str) -> List[Dict[str, Any]]:
             verdict = "approved" if "--approve" in p or " -a" in p else "changes" if "--request-changes" in p or " -r" in p else "reviewed"
             actions.append({"action": "review", "pr": _pr_number(p), "verdict": verdict, "body": clip(_flag(p, "--body", "-b") or "", 140)})
         elif re.search(r"\bgh\s+pr\s+comment\b", p):
-            actions.append({"action": "review", "pr": _pr_number(p), "verdict": "reviewed", "body": clip(_flag(p, "--body", "-b") or "", 140)})
+            body = pr_comments.pop(0) if pr_comments else (_flag(p, "--body", "-b") or "")
+            verdict, rest = parse_review_verdict(body)
+            actions.append({"action": "review", "pr": _pr_number(p), "verdict": verdict or "reviewed", "body": clip(rest, 140)})
         elif re.search(r"\bgh\s+pr\s+checks\b|\bgh\s+run\s+(watch|view|list)\b", p):
             actions.append({"action": "ci", "pr": _pr_number(p)})
         elif re.search(r"\bgh\s+issue\s+create\b", p):

@@ -174,6 +174,51 @@ class TestClassify(PluginCase):
         a = self.tool_actions("write_file", {"path": "docs/BRD.md", "content": "x"})
         self.assertEqual(a[0]["action"], "brd")
 
+    def test_review_verdict_comments_are_read_from_the_first_line(self):
+        # All agents share one GitHub account, so the Reviewer comments instead of `gh pr review --approve`.
+        ok = self.tool_actions("terminal", {"command": 'gh pr comment 12 --body "Review: approved\nChecked: contract, tests, security. CI is green."'})
+        self.assertEqual(ok, [{"action": "review", "pr": "12", "verdict": "approved", "body": "Checked: contract, tests, security. CI is green."}])
+        bad = self.tool_actions("terminal", {"command": 'gh pr comment 12 --body "Review: changes requested\n1. src/tip.ts line 12: round to 2 decimals.\n2. add a test; fix the label"'})
+        self.assertEqual((bad[0]["action"], bad[0]["pr"], bad[0]["verdict"]), ("review", "12", "changes"))
+        self.assertIn("src/tip.ts line 12", bad[0]["body"])
+        self.assertEqual(len(bad), 1, "the lines of a multi-line comment are not read as separate commands")
+
+    def test_review_verdict_forms(self):
+        cases = [
+            ('gh pr comment 3 --body "Review: approved"', "approved"),
+            ("gh pr comment 3 -b 'Review: changes requested'", "changes"),
+            ('gh pr comment 3 --body="Review: Approved. Checked all."', "approved"),
+            ('gh pr comment 3 --body "**Review: approved**"', "approved"),
+            ('gh pr comment 3 --body "review: CHANGES REQUESTED"', "changes"),
+            ('gh pr comment 3 --body "Review: request changes"', "changes"),
+            ("gh pr comment 3 --body \"$(cat <<'EOF'\nReview: approved\nChecked: tests.\nEOF\n)\"", "approved"),
+            ('gh pr comment https://github.com/o/r/pull/3 --body "Review: approved"', "approved"),
+            ('gh pr comment 3 --body "Thanks, merging soon"', "reviewed"),
+            ('gh pr comment 3 --body "I did not Review: approved this"', "reviewed"),
+            ('gh pr comment 3 --body "Review: approval pending"', "reviewed"),
+            ('gh pr comment 3 --body-file note.md', "reviewed"),
+            ("gh pr comment 3", "reviewed"),
+        ]
+        for cmd, verdict in cases:
+            with self.subTest(cmd=cmd):
+                a = self.tool_actions("terminal", {"command": cmd})
+                self.assertEqual(len(a), 1, a)
+                self.assertEqual((a[0]["action"], a[0]["pr"], a[0]["verdict"]), ("review", "3", verdict))
+
+    def test_review_verdict_then_merge_in_one_command_and_secrets_stay_hidden(self):
+        secret = "ghp_" + "q" * 36
+        cmd = f'gh pr checks 7 && gh pr comment 7 --body "Review: approved\nChecked. token {secret}" && gh pr merge 7 --squash --delete-branch'
+        a = self.tool_actions("terminal", {"command": cmd})
+        self.assertEqual([x["action"] for x in a], ["ci", "review", "pr_merge"])
+        self.assertEqual(a[1]["verdict"], "approved")
+        self.assertNotIn(secret, json.dumps(a))
+        two = self.tool_actions("terminal", {"command": 'gh pr comment 1 --body "Review: approved" ; gh pr comment 2 --body "Review: changes requested\nfix it"'})
+        self.assertEqual([(x["pr"], x["verdict"]) for x in two], [("1", "approved"), ("2", "changes")])
+
+    def test_old_gh_pr_review_still_works(self):
+        a = self.tool_actions("terminal", {"command": 'gh pr review 4 --approve --body "ok"'})
+        self.assertEqual((a[0]["verdict"], a[0]["pr"]), ("approved", "4"))
+
     def test_hooks_never_raise_or_block(self):
         h = self.p.HOOKS
         self.assertIsNone(h["pre_tool_call"](tool_name="terminal", args="not a dict", session_id="s"))
