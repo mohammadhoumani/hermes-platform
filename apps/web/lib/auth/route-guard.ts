@@ -19,6 +19,8 @@ export function isAssetPath(pathname: string): boolean {
     pathname.startsWith("/_next/") ||
     pathname === "/favicon.ico" ||
     pathname === "/robots.txt" ||
+    // The installer package behind /pkg/get_v2.sh (open source files, no secrets): the VM downloads it without a login.
+    pathname.startsWith("/pkg/") ||
     /\.(?:svg|png|jpe?g|gif|webp|ico|woff2?|css|js|map|txt)$/i.test(pathname)
   );
 }

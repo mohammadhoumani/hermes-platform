@@ -10,12 +10,12 @@ This repository is the new platform. The older single-file dashboard lives in `l
 
 ```text
 apps/web/              Next.js app (App Router, TypeScript, Tailwind): the platform UI
-hermes/plugin/         agent-room Hermes plugin (event stream)
-hermes/bridge/         bridge service (website orders -> Hermes API)
+hermes/plugin/         hermes-platform Hermes plugin v2 (event stream to Supabase)
+hermes/bridge/         bridge v2 (website orders -> Hermes API, one project at a time)
 hermes/skills/         SDLC skills, one SKILL.md per skill
-hermes/install/        installer for the VM
-hermes/tools/          simulate_run.py and other helpers
-hermes/tests/          mock Supabase and Hermes servers
+hermes/install/        installer v2 for the VM (install_v2.sh, get_v2.sh) with dry run and rollback
+hermes/tools/          fixture generator and other helpers
+hermes/tests/          mock Supabase and Hermes servers, plugin, bridge and installer tests
 supabase/migrations/   SQL migrations for the v2 data model (versioned, idempotent)
 supabase/tests/        SQL tests (run against a throwaway local PostgreSQL)
 template/              project template for generated apps (not started yet, see M3)
@@ -34,6 +34,7 @@ npm run lint         # eslint + markdown lint
 npm test             # unit tests (Vitest)
 npm run test:db      # SQL migrations + 150+ database checks on a throwaway PostgreSQL
 npm run test:skills  # validate the SKILL.md files
+npm run test:hermes  # Python and shell tests: plugin, bridge, installer (needs python3 and node)
 npm run test:e2e     # Playwright UI tests (starts the app in test mode by itself)
 ```
 
@@ -45,6 +46,12 @@ HERMES_TEST_MODE=1 npm run dev     # then open http://localhost:3000 with the te
 
 Run it against a real Supabase project: copy `apps/web/.env.example` to `apps/web/.env.local`, fill in the project URL and
 the publishable key, then `npm run dev`.
+
+## Going live
+
+`docs/M2_RUNBOOK.md` is the step by step cut-over list (database, website, VM installer, test run, rollback).
+`docs/M2_DEPLOY_CHECKLIST.md` has the Vercel settings, environment variables, Supabase Auth settings and the security checklist.
+`docs/M2_REPORT.md` says what was built in Milestone 2 and what is not verified yet.
 
 ## Rules
 

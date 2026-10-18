@@ -31,6 +31,19 @@ describe("decideAccess: signed out", () => {
     expect(decideAccess({ pathname: "/authx", signedIn: false }).action).toBe("redirect");
   });
 
+  it.each(["/pkg/get_v2.sh", "/pkg/SHA256SUMS", "/pkg/skills/sdlc-ba/SKILL.md", "/pkg/install/install_v2.sh"])(
+    "lets the installer package %s through without a login",
+    (p) => {
+      expect(decideAccess({ pathname: p, signedIn: false })).toEqual({ action: "allow" });
+    },
+  );
+
+  it("only opens the /pkg/ folder, not look-alike pages", () => {
+    for (const p of ["/pkg", "/pkgs/x", "/projects/pkg/", "/settings/pkg/x"]) {
+      expect(decideAccess({ pathname: p, signedIn: false }).action).toBe("redirect");
+    }
+  });
+
   it("does not let a path that only ends like a file skip the check", () => {
     expect(isAssetPath("/projects/secret.txt.html")).toBe(false);
     expect(isAssetPath("/projects/x/y.css")).toBe(true); // static by extension; pages never end like this
