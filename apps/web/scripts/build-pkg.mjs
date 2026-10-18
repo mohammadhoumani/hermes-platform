@@ -27,6 +27,8 @@ export function buildPkg({ out, base }) {
     ['plugin/hermes-platform/__init__.py', 'plugin/hermes-platform/__init__.py'],
     ['plugin/hermes-platform/plugin.yaml', 'plugin/hermes-platform/plugin.yaml'],
     ['bridge/platform_bridge.py', 'bridge/platform_bridge.py'],
+    ['devin/devin_poller.py', 'devin/devin_poller.py'],
+    ['devin/config.yaml.snippet', 'devin/config.yaml.snippet'],
   ];
   const skillsDir = join(hermes, 'skills');
   for (const d of readdirSync(skillsDir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort()) {
