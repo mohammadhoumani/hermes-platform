@@ -19,7 +19,7 @@
     "test": "npm run -w apps/web test",
     "test:e2e": "npm run -w apps/web test:e2e",
     "test:db": "bash supabase/tests/run.sh",
-    "test:skills": "node hermes/skills/validate.mjs",
+    "test:skills": "node hermes/skills/validate.mjs && node --test hermes/skills/validate.test.mjs",
     "test:all": "npm run lint && npm test && npm run test:db && npm run test:skills && npm run build && npm run test:e2e",
     "screenshots": "npm run -w apps/web screenshots"
   },
