@@ -103,8 +103,9 @@ def build() -> list:
     reply("All tasks have a pull request.")
 
     skill("sdlc-review")
-    sh('gh pr review 4 --approve --body "Looks good"')
-    sh('gh pr review 5 --approve --body "Looks good"')
+    # all agents share one GitHub account, so the Reviewer posts its verdict as a comment (first line = verdict)
+    sh('gh pr comment 4 --body "Review: approved\nChecked: contract, tests, security. CI is green."')
+    sh('gh pr comment 5 --body "Review: approved\nChecked: contract, tests, security. CI is green."')
     sh("gh pr merge 4 --squash --delete-branch")
     sh("gh pr merge 5 --squash --delete-branch")
 

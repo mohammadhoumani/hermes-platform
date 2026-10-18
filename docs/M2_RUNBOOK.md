@@ -248,6 +248,18 @@ Do this when nobody is using the old Agent Room.
    journalctl --user -u hermes-platform-bridge -f
    ```
 
+6. Optional: turn on Devin. Skip this if you have no Devin key (a key that starts with `cog_`). Type the key
+   (it does not show on screen and it is not saved in the shell history), then run the installer again.
+   Add `--dry-run` first if you want to see the changes:
+
+   ```bash
+   read -rs DEVIN_API_KEY; export DEVIN_API_KEY
+   bash get_v2.sh --devin-key-from-env
+   ```
+
+   The installer saves the key in `~/.hermes/.env`, adds Devin to `~/.hermes/config.yaml`, and restarts Hermes.
+   The bridge then watches the Devin work by itself. Never type the key in the command line.
+
 **Going back from Part 4:** one command on the VM. See **Going back** at the end.
 
 ## Part 5. Test with the calculator demo

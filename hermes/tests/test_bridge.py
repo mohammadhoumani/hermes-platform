@@ -25,6 +25,7 @@ os.environ["HERMES_PLATFORM_EVENTS"] = str(HOME / "platform" / "events.jsonl")
 from mock_platform import KEY, WRITE, MockPlatform  # noqa: E402
 from fake_hermes import KEY as API_KEY, LIVE, STAGING, Brain, FakeHermes  # noqa: E402
 import platform_bridge as pb  # noqa: E402
+from test_devin_poller import MockDevin  # noqa: E402
 
 mock = MockPlatform()
 plugin = None
@@ -490,6 +491,212 @@ class TestProcess(BridgeCase):
         self.assertIn(pid, state["projects"])
         self.assertEqual(oct((home / "platform" / "bridge_state.json").stat().st_mode & 0o777), "0o600")
         self.assertNotIn(WRITE, out)
+
+
+DEVIN_KEY = "cog_test_not_a_real_key"
+DEVIN_PR = "https://github.com/bot/calc/pull/6"
+
+
+class TestDevin(BridgeCase):
+    """The Devin poller runs inside the bridge loop: throttled, mapped to the project, never fatal."""
+
+    def setUp(self):
+        super().setUp()
+        self.devin = MockDevin()
+        self.addCleanup(self.devin.close)
+        self.clock = [1000.0]
+        self.data = self.tmp / "platform"
+
+    def make(self, **over) -> "pb.Bridge":
+        s = settings(self.data, devin_key=DEVIN_KEY, devin_org="", devin_base=self.devin.url, devin_interval=30.0, **over)
+        return pb.Bridge(s, now=lambda: self.clock[0])
+
+    def running_project(self, bridge, status="development"):
+        pid = mock.add_project("Calc")
+        P = bridge.new_project(pid, "a calculator")
+        P["status"] = status
+        return pid
+
+    def sessions_file(self, *rows):
+        self.data.mkdir(parents=True, exist_ok=True)
+        (self.data / "devin_sessions.json").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+
+    def tick(self, bridge, advance=0.0):
+        self.clock[0] += advance
+        bridge.tick()
+
+    def test_without_a_key_nothing_runs(self):
+        b = pb.Bridge(settings(self.data), now=lambda: self.clock[0])
+        self.assertIsNone(b.devin)
+        pid = self.running_project(b)
+        self.sessions_file({"session_id": "devin-abc123", "project_id": pid})
+        self.tick(b)
+        self.assertEqual(self.devin.requests, [])
+        self.assertEqual(mock.events_of(pid, "devin_status"), [])
+
+    def test_status_events_reach_the_platform_with_the_project(self):
+        b = self.make()
+        pid = self.running_project(b)
+        self.sessions_file({"session_id": "devin-abc123", "project_id": pid, "task": "Task 3"})
+        self.devin.script["/v1/sessions/devin-abc123"] = [(200, {"status_enum": "working"})]
+        self.tick(b)
+        self.assertEqual(mock.sessions.get("devin-abc123"), pid)  # platform_map_session was called
+        self.assertEqual(mock.calls_named("platform_map_session")[-1]["role"], "devin")
+        evs = mock.events_of(pid, "devin_status")
+        self.assertEqual(len(evs), 1)
+        self.assertEqual(evs[0]["session_id"], "devin-abc123")
+        self.assertEqual(evs[0]["payload"]["status"], "working")
+        self.assertEqual(evs[0]["payload"]["project"], pid)
+        # later: a pull request, then done
+        self.devin.script["/v1/sessions/devin-abc123"] = [(200, {"status_enum": "working", "pull_request": {"url": DEVIN_PR}})]
+        self.tick(b, 31)
+        self.devin.script["/v1/sessions/devin-abc123"] = [(200, {"status_enum": "finished", "pull_request": {"url": DEVIN_PR}})]
+        self.tick(b, 31)
+        evs = mock.events_of(pid, "devin_status")
+        self.assertEqual([(e["payload"]["status"], e["payload"]["pr_url"], e["payload"]["finished"]) for e in evs],
+                         [("working", None, False), ("working", DEVIN_PR, False), ("finished", DEVIN_PR, True)])
+        self.assertEqual(len(mock.calls_named("platform_map_session")), 1)  # mapped once
+        # a finished session is not asked about again
+        n = len(self.devin.requests)
+        self.tick(b, 31)
+        self.assertEqual(len(self.devin.requests), n)
+
+    def test_polls_are_throttled(self):
+        b = self.make()
+        pid = self.running_project(b)
+        self.sessions_file({"session_id": "devin-abc123", "project_id": pid})
+        self.devin.script["/v1/sessions/devin-abc123"] = [(200, {"status_enum": "working"})]
+        for _ in range(5):
+            self.tick(b, 5)  # 25 seconds in total
+        self.assertEqual(len(self.devin.requests), 1)
+        self.tick(b, 10)  # 35 seconds after the first poll
+        self.assertEqual(len(self.devin.requests), 2)
+
+    def test_only_sessions_of_running_projects_are_polled(self):
+        b = self.make()
+        released = self.running_project(b, status="released")
+        self.sessions_file({"session_id": "devin-old111", "project_id": released}, {"session_id": "devin-other1", "project_id": "not-a-project"})
+        self.tick(b)
+        self.assertEqual(self.devin.requests, [])
+
+    def test_a_session_without_a_project_goes_to_the_running_project(self):
+        b = self.make()
+        pid = self.running_project(b)
+        self.sessions_file({"session_id": "devin-abc123"})
+        self.devin.script["/v1/sessions/devin-abc123"] = [(200, {"status_enum": "working"})]
+        self.tick(b)  # no project is running yet: nothing can be sent, but nothing breaks
+        self.assertEqual(mock.events_of(pid, "devin_status"), [])
+        b.state["slot"] = pid
+        self.tick(b, 31)
+        self.assertEqual(len(mock.events_of(pid, "devin_status")), 1)
+        self.assertEqual(mock.sessions["devin-abc123"], pid)
+
+    def test_a_supabase_outage_does_not_lose_the_event(self):
+        b = self.make()
+        pid = self.running_project(b)
+        self.sessions_file({"session_id": "devin-abc123", "project_id": pid})
+        self.devin.script["/v1/sessions/devin-abc123"] = [(200, {"status_enum": "working"})]
+        mock.fail_next = 50
+        self.tick(b)
+        self.assertEqual(mock.events_of(pid, "devin_status"), [])
+        mock.fail_next = 0
+        self.tick(b, 1)
+        self.assertEqual(len(mock.events_of(pid, "devin_status")), 1)
+        self.assertEqual(mock.sessions["devin-abc123"], pid)
+
+    def test_unreachable_devin_never_stops_the_bridge(self):
+        import socket
+        sock = socket.socket()
+        sock.bind(("127.0.0.1", 0))
+        dead = f"http://127.0.0.1:{sock.getsockname()[1]}"
+        sock.close()
+        s = settings(self.data, devin_key=DEVIN_KEY, devin_org="", devin_base=dead, devin_interval=30.0)
+        b = pb.Bridge(s, now=lambda: self.clock[0])
+        pid = self.running_project(b)
+        self.sessions_file({"session_id": "devin-abc123", "project_id": pid}, {"session_id": "devin-abc124", "project_id": pid})
+        waits = []
+        for _ in range(4):
+            self.tick(b)
+            waits.append(b.devin_next - self.clock[0])
+            self.clock[0] = b.devin_next
+        self.assertEqual(waits, [60, 120, 240, 300])  # the wait grows to 5 minutes while Devin does not answer
+        self.assertEqual(mock.events_of(pid, "devin_status"), [])
+        # orders still work while Devin is down
+        oid = mock.add_order(pid, "message", "hello")
+        self.tick(b)
+        self.assertNotEqual(mock.order(oid)["status"], "queued")
+        # Devin comes back: the wait is back to normal and the events arrive
+        self.devin.script["/v1/sessions/devin-abc123"] = [(200, {"status_enum": "working"})]
+        self.devin.script["/v1/sessions/devin-abc124"] = [(200, {"status_enum": "working"})]
+        b.devin.base_url = self.devin.url
+        self.clock[0] = b.devin_next
+        self.tick(b)
+        self.assertEqual(len(mock.events_of(pid, "devin_status")), 2)
+        self.assertEqual(b.devin_next - self.clock[0], 30)
+
+    def test_devin_http_errors_are_survived(self):
+        b = self.make()
+        pid = self.running_project(b)
+        self.sessions_file({"session_id": "devin-abc123", "project_id": pid}, {"session_id": "devin-abc124", "project_id": pid})
+        self.devin.script["/v1/sessions/devin-abc123"] = [(401, {"detail": "bad key"})]
+        self.devin.script["/v1/sessions/devin-abc124"] = [(200, {"status_enum": "working"})]
+        self.tick(b)
+        self.assertEqual(len(self.devin.requests), 1)  # the second session is not tried after Devin refused the first
+        self.assertEqual(mock.events_of(pid, "devin_status"), [])
+        self.assertGreater(b.devin_next - self.clock[0], 30)
+        for r in self.devin.requests:
+            self.assertEqual(r[1], "Bearer " + DEVIN_KEY)
+        self.assertNotIn(DEVIN_KEY, json.dumps(mock.calls))
+
+    def test_a_missing_poller_module_only_turns_devin_off(self):
+        saved = pb.load_devin_poller
+        pb.load_devin_poller = lambda: (_ for _ in ()).throw(ImportError("not here"))
+        try:
+            b = self.make()
+        finally:
+            pb.load_devin_poller = saved
+        self.assertIsNone(b.devin)
+        b.tick()
+
+    def test_restart_does_not_repeat_events(self):
+        b = self.make()
+        pid = self.running_project(b)
+        self.sessions_file({"session_id": "devin-abc123", "project_id": pid})
+        self.devin.script["/v1/sessions/devin-abc123"] = [(200, {"status_enum": "working"})]
+        self.tick(b)
+        b2 = self.make()
+        self.tick(b2, 31)
+        self.assertEqual(len(mock.events_of(pid, "devin_status")), 1)
+
+    def test_settings_read_the_key_from_the_env_file(self):
+        home = Path(tempfile.mkdtemp(prefix="hp-set-"))
+        self.addCleanup(shutil.rmtree, home, True)
+        (home / "platform").mkdir()
+        (home / "platform" / "config.json").write_text(json.dumps({"supabase_url": "https://x.example.test", "supabase_key": "k", "write_key": "w"}))
+        (home / ".env").write_text(f"API_SERVER_KEY=abc\nDEVIN_API_KEY={DEVIN_KEY}\nDEVIN_ORG_ID=org-1\n")
+        saved = {k: os.environ.pop(k) for k in list(os.environ) if k in ("DEVIN_API_KEY", "DEVIN_ORG_ID") or (k.startswith("HERMES_PLATFORM_") and k != "HERMES_PLATFORM_EVENTS")}
+        try:
+            s = pb.load_settings(home)
+            (home / ".env").write_text("API_SERVER_KEY=abc\n")
+            none = pb.load_settings(home)
+        finally:
+            os.environ.update(saved)
+        self.assertEqual((s["devin_key"], s["devin_org"], s["devin_interval"]), (DEVIN_KEY, "org-1", 30.0))
+        self.assertEqual(none["devin_key"], "")
+
+    def test_check_mentions_devin_without_showing_the_key(self):
+        import subprocess
+        home = Path(tempfile.mkdtemp(prefix="hp-proc-"))
+        self.addCleanup(shutil.rmtree, home, True)
+        (home / "platform").mkdir()
+        (home / "platform" / "config.json").write_text(json.dumps({"supabase_url": mock.url, "supabase_key": KEY, "write_key": WRITE, "hermes_api": fake.url}))
+        (home / ".env").write_text(f"API_SERVER_ENABLED=true\nAPI_SERVER_KEY={API_KEY}\nDEVIN_API_KEY={DEVIN_KEY}\n")
+        env = {k: v for k, v in os.environ.items() if not k.startswith("HERMES_PLATFORM_")}
+        env.update(HERMES_HOME=str(home), HERMES_PLATFORM_EVENTS=os.environ["HERMES_PLATFORM_EVENTS"])
+        r = subprocess.run([sys.executable, str(ROOT / "bridge" / "platform_bridge.py"), "--check"], env=env, capture_output=True, text=True, timeout=30)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("Devin polling is on", r.stdout)
+        self.assertNotIn(DEVIN_KEY, r.stdout + r.stderr)
 
 
 class TestHelpers(unittest.TestCase):

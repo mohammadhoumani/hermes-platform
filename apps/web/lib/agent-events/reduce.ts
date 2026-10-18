@@ -25,6 +25,7 @@ import {
   type AgentId,
   type AgentStatus,
   type DevinEvent,
+  type DevinStatusEvent,
   type FeedItem,
   type FeedTag,
   type LaneId,
@@ -78,6 +79,7 @@ function cloneState(p: ViewState): ViewState {
       laneOwner: { ...p.internal.laneOwner },
       laneUsed: { ...p.internal.laneUsed },
       prLane: { ...p.internal.prLane },
+      ...(p.internal.devinEnded ? { devinEnded: { ...p.internal.devinEnded } } : {}),
     },
   };
 }
@@ -494,6 +496,42 @@ function onDevin(s: ViewState, ev: DevinEvent, ts: number | undefined): void {
   }
 }
 
+/** "#6" from a pull request address like https://github.com/o/r/pull/6 (or from "#6" / 6). */
+function prFromStatus(ev: DevinStatusEvent): string {
+  const raw = ev.pr_url || ev.pr;
+  if (!raw) return "";
+  const m = /\/pull\/(\d+)/.exec(String(raw));
+  if (m) return "#" + m[1];
+  return /^#?\d+$/.test(String(raw)) ? prKey(raw) : "";
+}
+
+/**
+ * `devin_status` comes from the bridge's Devin poller, which only reports changes. It becomes the same steps as the other
+ * Devin events: the first one of a session starts the lane, a new pull request is devin_pr, `finished` is devin_done
+ * and `failed` is devin_failed.
+ */
+function onDevinStatus(s: ViewState, ev: DevinStatusEvent, ts: number | undefined): void {
+  const sid = ev.sid ?? ev.session_id;
+  const status = ev.status ?? "unknown";
+  const text = clip(ev.text ?? "", 160);
+  const pr = prFromStatus(ev);
+  const terminal = ev.finished === true || status === "finished" || status === "failed";
+  const base = sid ? { sid } : {};
+  if (sid && s.internal.devinEnded?.[sid]) return; // a late duplicate of a session that already ended
+  if (!s.internal.laneOwner.devin && !terminal) {
+    onDevin(s, { type: "devin_started", ...base, text: text || "Devin started a session" }, ts);
+  } else if (!terminal && !pr) {
+    onDevin(s, { type: "devin_progress", ...base, text }, ts);
+  }
+  if (pr && pr !== s.lanes.devin.pr) {
+    onDevin(s, { type: "devin_pr", ...base, pr, text: safeHttpUrl(ev.pr_url) ?? "" }, ts);
+  }
+  if (terminal) {
+    if (sid) s.internal.devinEnded = { ...s.internal.devinEnded, [sid]: true };
+    onDevin(s, { type: status === "failed" ? "devin_failed" : "devin_done", ...base, text }, ts);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // The reducer
 // ---------------------------------------------------------------------------
@@ -639,6 +677,9 @@ export function applyEvent(prev: ViewState, ev: AgentEvent): ViewState {
     case "devin_done":
     case "devin_failed":
       onDevin(s, ev, ts);
+      break;
+    case "devin_status":
+      onDevinStatus(s, ev, ts);
       break;
     default:
       break; // session_start, plugin_loaded and unknown types do not change the view

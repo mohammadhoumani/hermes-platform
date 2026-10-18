@@ -5,6 +5,7 @@
 #   bash install_v2.sh --dry-run ...                  show what would change, change nothing
 #   bash install_v2.sh --rollback                     put everything back the way it was before the last install
 #   bash install_v2.sh --rollback --backup 20261031-101500   go back to one specific backup
+#   export DEVIN_API_KEY=cog_...; bash install_v2.sh ... --devin-key-from-env   also set up Devin (optional; see below)
 #
 # What it does (in this order):
 #   1. checks the write key with one harmless call (an empty list of events)
@@ -15,6 +16,10 @@
 #   6. stops the old Agent Room bridge and plugin (unless you say --keep-legacy)
 #   7. enables the plugin, restarts the gateway, starts the systemd user service hermes-platform-bridge
 #   8. runs the bridge self check and prints a summary
+#
+# Devin (optional): with --devin-key-from-env the installer reads DEVIN_API_KEY (and DEVIN_ORG_ID, if set) from the
+# environment, never from the command line, stores them in ~/.hermes/.env (mode 600), adds the Devin server to
+# mcp_servers in ~/.hermes/config.yaml and installs the Devin poller next to the bridge. Without it Devin is skipped.
 #
 # Nothing here prints a key. Python 3 and the standard Linux tools are enough.
 set -euo pipefail
@@ -41,6 +46,8 @@ MIRROR_LEGACY=0
 KEEP_LEGACY=0
 KEEP_TELEGRAM=0
 SKIP_VERIFY=0
+DEVIN_FROM_ENV=0
+DEVIN_KEY="" DEVIN_ORG=""
 DRY=0
 MODE=install
 BACKUP_ARG=""
@@ -57,7 +64,7 @@ die()   { printf '%sERROR:%s %s\n' "$C_R" "$C_0" "$*" >&2; exit 1; }
 
 dry_tag() { if [ "$DRY" = 1 ]; then printf '(dry-run) '; fi; }
 
-usage() { sed -n '2,22p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,28p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -73,6 +80,9 @@ while [ $# -gt 0 ]; do
     --keep-legacy)       KEEP_LEGACY=1 ;;
     --keep-telegram)     KEEP_TELEGRAM=1 ;;
     --skip-verify)       SKIP_VERIFY=1 ;;
+    --devin-key-from-env) DEVIN_FROM_ENV=1 ;;
+    --devin-key|--devin-key=*|--devin-org|--devin-org=*)
+                         die "Do not type the Devin key on the command line (it would stay in your shell history). Run:  export DEVIN_API_KEY=...   and then use --devin-key-from-env" ;;
     --dry-run)           DRY=1 ;;
     --uninstall|--rollback) MODE=rollback ;;
     --backup)            BACKUP_ARG="${2:?--backup needs a name}"; shift ;;
@@ -156,10 +166,11 @@ put_dir() {
   CHANGES+=("installed $label -> $dst")
 }
 
-# edit CMD FILE LABEL: run an edit_config.py command; back the file up first if it will change
+# edit CMD FILE LABEL [EXTRA ARGS]: run an edit_config.py command; back the file up first if it will change
 edit() {
   local cmd="$1" file="$2" label="$3" out res line
-  out="$(python3 "$HERE/edit_config.py" "$cmd" --file "$file" --dry-run)" || die "could not check $file"
+  shift 3
+  out="$(python3 "$HERE/edit_config.py" "$cmd" --file "$file" "$@" --dry-run)" || die "could not check $file"
   res="$(printf '%s\n' "$out" | sed -n 's/^RESULT //p')"
   printf '%s\n' "$out" | grep -v '^RESULT ' || true
   [ "$res" = changed ] || return 0
@@ -168,7 +179,7 @@ edit() {
   done < <(printf '%s\n' "$out" | grep -v '^RESULT ' || true)
   [ "$DRY" = 1 ] && { would "$label"; return 0; }
   track "$file"
-  python3 "$HERE/edit_config.py" "$cmd" --file "$file" > /dev/null
+  python3 "$HERE/edit_config.py" "$cmd" --file "$file" "$@" > /dev/null
 }
 
 run_hermes() { # never fatal: print a warning with the manual command instead
@@ -314,6 +325,20 @@ if [ "$MIRROR_LEGACY" = 1 ] && [ -z "$LEGACY_WRITE$LEGACY_URL$LEGACY_KEY" ]; the
 fi
 [ "$MIRROR_LEGACY" = 1 ] && { [ -n "$LEGACY_URL" ] && [ -n "$LEGACY_KEY" ] && [ -n "$LEGACY_WRITE" ] || die "--mirror-legacy needs all three old settings (--legacy-supabase-url, --legacy-supabase-key, --legacy-write-key)."; }
 
+# Devin is optional: the key comes from the environment only
+DEVIN_ON=0
+if [ "$DEVIN_FROM_ENV" = 1 ]; then
+  DEVIN_KEY="${DEVIN_API_KEY:-}"; DEVIN_ORG="${DEVIN_ORG_ID:-}"
+  if [ -z "$DEVIN_KEY" ]; then
+    warn "--devin-key-from-env was given, but DEVIN_API_KEY is not set in the environment. Devin is skipped. (Run:  export DEVIN_API_KEY=cog_...  and try again.)"
+  else
+    case "$DEVIN_KEY$DEVIN_ORG" in
+      *[[:space:]\"\'\`\$\\#]*) die "DEVIN_API_KEY or DEVIN_ORG_ID has a space, a quote or another odd character. Copy it again without the extra characters." ;;
+    esac
+    DEVIN_ON=1
+  fi
+fi
+
 for f in plugin/$PLUGIN_NAME/__init__.py plugin/$PLUGIN_NAME/plugin.yaml bridge/platform_bridge.py; do
   [ -f "$PKG/$f" ] || die "Package file missing: $PKG/$f"
 done
@@ -375,6 +400,24 @@ else
   edit yaml-telegram "$HERMES_HOME/config.yaml" "set telegram.enabled: false in config.yaml"
 fi
 edit env-api "$HERMES_HOME/.env" "turn on the API server in .env"
+
+if [ "$DEVIN_ON" = 1 ]; then
+  say "Devin (optional)"
+  DEVIN_DIR="$PKG/devin"
+  if [ -f "$DEVIN_DIR/devin_poller.py" ] && [ -f "$DEVIN_DIR/config.yaml.snippet" ]; then
+    put_file "$DEVIN_DIR/devin_poller.py" "$HERMES_HOME/platform/devin_poller.py" 644 "Devin poller"
+    HP_DEVIN_KEY="$DEVIN_KEY" HP_DEVIN_ORG="$DEVIN_ORG" edit env-devin "$HERMES_HOME/.env" "store the Devin key in .env (mode 600)"
+    if [ "$DRY" = 1 ]; then
+      info "this Devin server would be merged into mcp_servers in $HERMES_HOME/config.yaml (the key stays in .env):"
+      grep -v '^[[:space:]]*#' "$DEVIN_DIR/config.yaml.snippet" | sed 's/^/        /'
+    fi
+    edit yaml-devin "$HERMES_HOME/config.yaml" "add the Devin MCP server to config.yaml" --snippet "$DEVIN_DIR/config.yaml.snippet"
+  else
+    warn "Devin was asked for, but the Devin files are not in this package ($DEVIN_DIR). Devin is skipped."
+  fi
+else
+  info "Devin: skipped (no key given). To add it later:  export DEVIN_API_KEY=cog_...  and run this installer again with --devin-key-from-env"
+fi
 
 say "Step 5 of 8: platform settings ($CFG)"
 cfg_out="$(HP_URL="$SUPABASE_URL" HP_KEY="$SUPABASE_KEY" HP_WRITE="$WRITE_KEY" HP_GITHUB_OWNER="$GITHUB_OWNER" HP_TEMPLATE_REPO="$TEMPLATE_REPO" \

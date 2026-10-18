@@ -47,6 +47,10 @@ gh pr create --title "<task title>" --body "Closes #<issue number>. <one line on
 Then watch the checks (`gh pr checks <number> --watch`). If a check fails, fix it and push again.
 Do not merge your own pull request. The reviewer does that (see `sdlc-review`).
 
+The reviewer gives the verdict as a comment on your pull request. Its first line is `Review: approved` or
+`Review: changes requested`. Read the comments with `gh pr view <number> --comments`. After a
+"changes requested" comment, fix every point on the same branch, rebase on `main`, push, and say so in one line.
+
 ## The Team sync issue
 
 Team sync is how coders talk to each other without a human. It is one pinned issue.

@@ -76,7 +76,10 @@ The event, one line of JSON:
 
 `status` is one of `working`, `blocked`, `finished`, `failed`, `suspended`, `unknown`. `pr` is the pull request address once Devin has one.
 
-To forward the events from the bridge, import the module and call `DevinPoller(...).poll_once()` in the bridge loop, with a callback
-that sends the event to the website (the event has the `project` field the bridge needs). That wiring is part of the bridge, not of this folder.
+The bridge runs this poller by itself when `DEVIN_API_KEY` is in `~/.hermes/.env` (and `DEVIN_ORG_ID`, if you have one).
+It polls at most every 30 seconds (setting `devin_poll_seconds` in `~/.hermes/platform/config.json`), maps each Devin session to its
+project with `platform_map_session`, and sends the `devin_status` events to the website. If Devin cannot be reached the bridge
+keeps working and waits longer between tries (up to 5 minutes). `devin_poller.py` must sit next to `platform_bridge.py`
+(the installer does this). Without a key the bridge does nothing about Devin.
 
 Tests: `python3 -m unittest hermes.tests.test_devin_poller` (a mock server on 127.0.0.1; no real Devin calls).

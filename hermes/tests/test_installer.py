@@ -150,7 +150,7 @@ class Fake:
             (self.state / "legacy_active").write_text("")
 
     def env(self, **extra) -> dict:
-        e = {k: v for k, v in os.environ.items() if not k.startswith(("HERMES_", "HP_"))}
+        e = {k: v for k, v in os.environ.items() if not k.startswith(("HERMES_", "HP_", "DEVIN_"))}
         e.update(HOME=str(self.home), HERMES_HOME=str(self.h), PATH=f"{self.bin}:{os.environ['PATH']}", XDG_RUNTIME_DIR=str(self.base / "run"),
                  HP_SHIM_LOG=str(self.log), HP_SHIM_STATE=str(self.state), HERMES_PLATFORM_VERIFY_WAIT="0")
         e.pop("XDG_CONFIG_HOME", None)
@@ -451,6 +451,266 @@ class InstallTests(unittest.TestCase):
         r = f.run(INSTALL, "--rollback")
         self.assertEqual(r.returncode, 1)
         self.assertIn("Refusing to touch /etc/passwd", r.stderr)
+
+
+DEVIN_KEY = "cog_fake_devin_key_0123456789"
+SNIPPET = ROOT / "devin" / "config.yaml.snippet"
+
+
+def load_yaml(path: Path):
+    try:
+        import yaml  # type: ignore
+    except ImportError:
+        return None
+    return yaml.safe_load(path.read_text(encoding="utf-8"))
+
+
+class DevinInstallTests(unittest.TestCase):
+    """Optional Devin set-up: --devin-key-from-env. The key comes from the environment, never from the command line."""
+
+    def setUp(self):
+        mock.reset()
+
+    def devin_env(self, f, **extra):
+        return f.env(DEVIN_API_KEY=DEVIN_KEY, **extra)
+
+    def test_without_the_flag_devin_is_skipped_cleanly(self):
+        f = Fake(self)
+        r = f.run(INSTALL, *f.args(), env=self.devin_env(f))  # the key is in the environment, but the flag is not given
+        out = r.stdout + r.stderr
+        self.assertEqual(r.returncode, 0, out)
+        self.assertIn("Devin: skipped", out)
+        self.assertNotIn("DEVIN_API_KEY", (f.h / ".env").read_text())
+        self.assertNotIn("mcp_servers", (f.h / "config.yaml").read_text())
+        self.assertFalse((f.h / "platform" / "devin_poller.py").exists())
+        self.assertNotIn(DEVIN_KEY, out)
+
+    def test_the_flag_without_a_key_warns_and_skips(self):
+        f = Fake(self)
+        r = f.install("--devin-key-from-env")
+        out = r.stdout + r.stderr
+        self.assertEqual(r.returncode, 0, out)
+        self.assertIn("DEVIN_API_KEY is not set", out)
+        self.assertIn("Devin: skipped", out)
+        self.assertNotIn("DEVIN_API_KEY", (f.h / ".env").read_text())
+
+    def test_the_key_can_not_be_given_on_the_command_line(self):
+        f = Fake(self)
+        before = f.tree()
+        for arg in (["--devin-key", DEVIN_KEY], [f"--devin-key={DEVIN_KEY}"]):
+            r = f.install(*arg)
+            self.assertEqual(r.returncode, 1)
+            self.assertIn("--devin-key-from-env", r.stderr)
+            self.assertNotIn(DEVIN_KEY, r.stdout + r.stderr)
+        self.assertEqual(f.tree(), before)
+
+    def test_install_stores_the_key_and_merges_the_mcp_server(self):
+        f = Fake(self)
+        before = f.tree()
+        r = f.run(INSTALL, *f.args("--devin-key-from-env"), env=self.devin_env(f, DEVIN_ORG_ID="org-test-1"))
+        out = r.stdout + r.stderr
+        self.assertEqual(r.returncode, 0, out)
+        self.assertNotIn(DEVIN_KEY, out)
+        env = (f.h / ".env").read_text()
+        self.assertIn(f"DEVIN_API_KEY={DEVIN_KEY}", env)
+        self.assertIn("DEVIN_ORG_ID=org-test-1", env)
+        self.assertIn("OTHER_VAR=keepme", env)
+        self.assertEqual(oct((f.h / ".env").stat().st_mode & 0o777), "0o600")
+        y = (f.h / "config.yaml").read_text()
+        self.assertNotIn(DEVIN_KEY, y)
+        self.assertIn("mcp_servers:", y)
+        self.assertIn('Authorization: "Bearer ${DEVIN_API_KEY}"', y)
+        self.assertIn('url: "https://mcp.devin.ai/mcp"', y)
+        self.assertIn("model: fake-model", y)
+        # (the fake `hermes plugins enable` appends a list item at the end of the file, which is not valid there: leave it out)
+        (f.h / "parsed.yaml").write_text("".join(l for l in y.splitlines(True) if l.strip() != "- hermes-platform"))
+        data = load_yaml(f.h / "parsed.yaml")
+        (f.h / "parsed.yaml").unlink()
+        if data is not None:
+            self.assertEqual(data["mcp_servers"]["devin"]["url"], "https://mcp.devin.ai/mcp")
+            self.assertEqual(data["mcp_servers"]["devin"]["tools"]["include"], ["devin_session_*", "ask_question", "read_wiki_*"])
+            self.assertEqual(data["platforms"]["telegram"]["enabled"], False)
+        self.assertEqual((f.h / "platform" / "devin_poller.py").read_bytes(), (ROOT / "devin" / "devin_poller.py").read_bytes())
+        self.assertIn("DEVIN_API_KEY", out)  # names are shown, values are not
+        # the backup keeps the old files, and the key is not in the backup
+        bk = f.backups()[0]
+        self.assertNotIn("DEVIN_API_KEY", (bk / "files" / str(f.h).lstrip("/") / ".env").read_text())
+        # rollback puts everything back
+        self.assertEqual(f.run(INSTALL, "--rollback").returncode, 0)
+        self.assertEqual(f.tree(), before)
+
+    def test_running_it_twice_changes_nothing_and_a_new_key_updates_env(self):
+        f = Fake(self)
+        env = self.devin_env(f)
+        self.assertEqual(f.run(INSTALL, *f.args("--devin-key-from-env"), env=env).returncode, 0)
+        first = f.tree()
+        r = f.run(INSTALL, *f.args("--devin-key-from-env"), env=env)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("Nothing needed changing", r.stdout)
+        self.assertEqual(f.tree(), first)
+        self.assertEqual(len(f.backups()), 1)
+        self.assertEqual((f.h / "config.yaml").read_text().count("mcp.devin.ai"), 1, "the server block is not added twice")
+        r = f.run(INSTALL, *f.args("--devin-key-from-env"), env=f.env(DEVIN_API_KEY="cog_new_key_987654321"))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        env_text = (f.h / ".env").read_text()
+        self.assertIn("DEVIN_API_KEY=cog_new_key_987654321", env_text)
+        self.assertEqual(env_text.count("DEVIN_API_KEY="), 1)
+        self.assertNotIn("cog_new_key_987654321", r.stdout + r.stderr)
+        self.assertEqual(len(f.backups()), 2)
+
+    def test_dry_run_shows_the_devin_changes_and_writes_nothing(self):
+        f = Fake(self)
+        before = snapshot(f.base)
+        r = f.run(INSTALL, *f.args("--devin-key-from-env", "--dry-run"), env=self.devin_env(f))
+        out = r.stdout + r.stderr
+        self.assertEqual(r.returncode, 0, out)
+        self.assertEqual(snapshot(f.base, skip=("shim.log",)), {k: v for k, v in before.items() if k != "shim.log"})
+        self.assertIn("DEVIN_API_KEY", out)
+        self.assertIn("mcp_servers", out)
+        self.assertIn("https://mcp.devin.ai/mcp", out)
+        self.assertIn("would install Devin poller", out)
+        self.assertNotIn(DEVIN_KEY, out)
+        self.assertFalse((f.h / "backups").exists())
+
+    def test_an_existing_mcp_servers_block_keeps_its_other_servers(self):
+        f = Fake(self)
+        (f.h / "config.yaml").write_text('model: fake-model\nmcp_servers:\n    github:   # mine\n        url: "https://example.test/mcp"\nplugins:\n  enabled:\n    - agent-room\n')
+        r = f.run(INSTALL, *f.args("--devin-key-from-env"), env=self.devin_env(f))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        y = (f.h / "config.yaml").read_text()
+        self.assertIn("    github:   # mine", y)
+        self.assertIn('        url: "https://example.test/mcp"', y)
+        self.assertIn("    devin:", y, "the new server uses the indentation of the existing ones")
+        data = load_yaml(f.h / "config.yaml")
+        if data is not None:
+            self.assertEqual(sorted(data["mcp_servers"]), ["devin", "github"])
+            self.assertEqual(data["mcp_servers"]["github"]["url"], "https://example.test/mcp")
+            self.assertEqual(data["mcp_servers"]["devin"]["timeout"], 120)
+
+    def test_an_existing_devin_server_is_left_alone(self):
+        f = Fake(self)
+        (f.h / "config.yaml").write_text('mcp_servers:\n  devin:\n    url: "https://my.own.test/mcp"\n')
+        r = f.run(INSTALL, *f.args("--devin-key-from-env"), env=self.devin_env(f))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("my.own.test", (f.h / "config.yaml").read_text())
+        self.assertNotIn("mcp.devin.ai", (f.h / "config.yaml").read_text())
+        self.assertIn("DEVIN_API_KEY=", (f.h / ".env").read_text())
+
+    def test_a_package_without_the_devin_files_skips_devin_with_a_warning(self):
+        pkg = Path(tempfile.mkdtemp(prefix="hp-pkg-"))
+        self.addCleanup(shutil.rmtree, pkg, True)
+        shutil.copytree(ROOT, pkg / "hermes", ignore=shutil.ignore_patterns("devin", "tests", "__pycache__"))
+        f = Fake(self)
+        r = f.run(pkg / "hermes" / "install" / "install_v2.sh", *f.args("--devin-key-from-env"), env=self.devin_env(f))
+        out = r.stdout + r.stderr
+        self.assertEqual(r.returncode, 0, out)
+        self.assertIn("Devin files are not in this package", out)
+        self.assertNotIn("DEVIN_API_KEY", (f.h / ".env").read_text())
+        self.assertNotIn(DEVIN_KEY, out)
+
+    def test_a_key_with_a_space_is_refused_before_any_change(self):
+        f = Fake(self)
+        before = f.tree()
+        r = f.run(INSTALL, *f.args("--devin-key-from-env"), env=f.env(DEVIN_API_KEY="cog_a b"))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("odd character", r.stderr)
+        self.assertEqual(f.tree(), before)
+
+
+class EditDevinTests(unittest.TestCase):
+    def tmp(self, text, name="f", crlf=False) -> Path:
+        d = Path(tempfile.mkdtemp(prefix="hp-edit-"))
+        self.addCleanup(shutil.rmtree, d, True)
+        p = d / name
+        if text is not None:
+            p.write_bytes((text.replace("\n", "\r\n") if crlf else text).encode())
+        return p
+
+    def run_cmd(self, cmd, path, dry=False, key=DEVIN_KEY, org=""):
+        args = [sys.executable, str(ROOT / "install" / "edit_config.py"), cmd, "--file", str(path)]
+        if cmd == "yaml-devin":
+            args += ["--snippet", str(SNIPPET)]
+        if dry:
+            args.append("--dry-run")
+        return subprocess.run(args, capture_output=True, text=True, env={**os.environ, "HP_DEVIN_KEY": key, "HP_DEVIN_ORG": org})
+
+    def test_env_devin_adds_updates_dedupes_and_never_prints_the_value(self):
+        p = self.tmp("A=1\n# DEVIN_API_KEY=commented\nexport DEVIN_API_KEY = old\nDEVIN_API_KEY=again\nB=2\n", crlf=True)
+        r = self.run_cmd("env-devin", p, org="org-1")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("RESULT changed", r.stdout)
+        self.assertNotIn(DEVIN_KEY, r.stdout + r.stderr)
+        text = p.read_bytes().decode()
+        self.assertIn("\r\n", text)
+        self.assertEqual(text.count("DEVIN_API_KEY="), 2)  # the new line and the comment
+        self.assertIn(f"DEVIN_API_KEY={DEVIN_KEY}", text)
+        self.assertIn("# DEVIN_API_KEY=commented", text)
+        self.assertIn("DEVIN_ORG_ID=org-1", text)
+        self.assertIn("A=1", text)
+        self.assertIn("B=2", text)
+        self.assertEqual(oct(p.stat().st_mode & 0o777), "0o600")
+        self.assertIn("RESULT unchanged", self.run_cmd("env-devin", p, org="org-1").stdout)
+
+    def test_env_devin_creates_the_file_with_mode_600_and_dry_run_writes_nothing(self):
+        p = self.tmp(None, ".env")
+        r = self.run_cmd("env-devin", p, dry=True)
+        self.assertIn("RESULT changed", r.stdout)
+        self.assertFalse(p.exists())
+        self.run_cmd("env-devin", p)
+        self.assertEqual(p.read_text(), f"DEVIN_API_KEY={DEVIN_KEY}\n")
+        self.assertEqual(oct(p.stat().st_mode & 0o777), "0o600")
+
+    def test_env_devin_refuses_odd_values_and_empty_keys(self):
+        p = self.tmp("A=1\n")
+        for bad in ("two words", 'qu"ote', "a$b", ""):
+            r = self.run_cmd("env-devin", p, key=bad)
+            self.assertEqual(r.returncode, 2)
+            self.assertNotIn("two words", r.stdout + r.stderr)
+        self.assertEqual(p.read_text(), "A=1\n")
+
+    YAML_CASES = [
+        ("no section", "model: x\n", True),
+        ("empty flow", "mcp_servers: {}\nmodel: x\n", True),
+        ("null", "mcp_servers:\nmodel: x\n", True),
+        ("with a comment", "mcp_servers:   # none yet\nmodel: x\n", True),
+        ("other server, two spaces", 'mcp_servers:\n  other:\n    url: "https://a.test"\nmodel: x\n', True),
+        ("other server, four spaces, and a comment", 'mcp_servers:\n    # my servers\n    other:\n        url: "https://a.test"\nmodel: x\n', True),
+        ("already there", 'mcp_servers:\n  devin:\n    url: "https://x.test"\n', False),
+        ("one line flow with content is not touched", 'mcp_servers: {other: {url: "https://a.test"}}\n', False),
+        ("list is not touched", "mcp_servers:\n  - name: other\n", False),
+    ]
+
+    def test_yaml_devin_cases(self):
+        for name, text, changes in self.YAML_CASES:
+            with self.subTest(name):
+                p = self.tmp(text, "config.yaml")
+                r = self.run_cmd("yaml-devin", p)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertIn("RESULT " + ("changed" if changes else "unchanged"), r.stdout)
+                out = p.read_text()
+                if not changes:
+                    self.assertEqual(out, text)
+                    continue
+                data = load_yaml(p)
+                if data is not None:
+                    self.assertEqual(data["mcp_servers"]["devin"]["url"], "https://mcp.devin.ai/mcp")
+                    self.assertEqual(data.get("model"), "x" if "model" in text else None)
+                    if "other" in text:
+                        self.assertIn("other", data["mcp_servers"])
+                self.assertNotIn(DEVIN_KEY, out + r.stdout)
+                self.assertIn("RESULT unchanged", self.run_cmd("yaml-devin", p).stdout, "a second run changes nothing")
+
+    def test_yaml_devin_creates_a_missing_file_and_keeps_crlf_and_dry_run_writes_nothing(self):
+        p = self.tmp(None, "config.yaml")
+        self.assertIn("RESULT changed", self.run_cmd("yaml-devin", p, dry=True).stdout)
+        self.assertFalse(p.exists())
+        self.run_cmd("yaml-devin", p)
+        self.assertIn("mcp.devin.ai", p.read_text())
+        q = self.tmp("model: x\n", "config.yaml", crlf=True)
+        self.run_cmd("yaml-devin", q)
+        raw = q.read_bytes().decode()
+        self.assertNotIn("\n", raw.replace("\r\n", ""), "line endings stay CRLF")
+        self.assertIn("mcp.devin.ai", raw)
 
 
 class GetScriptTests(unittest.TestCase):
