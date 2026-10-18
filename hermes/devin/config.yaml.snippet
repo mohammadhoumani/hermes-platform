@@ -1,0 +1,16 @@
+# Add this to ~/.hermes/config.yaml (merge it into an existing `mcp_servers:` block if there is one).
+# Put the key in ~/.hermes/.env as a line:   DEVIN_API_KEY=cog_...   (never in this file, never in git)
+# Then restart the Hermes gateway. The tools appear as mcp_devin_devin_session_create and so on.
+mcp_servers:
+  devin:
+    url: "https://mcp.devin.ai/mcp"
+    headers:
+      Authorization: "Bearer ${DEVIN_API_KEY}"
+    # Allow-list: only these tools are given to the agents. Devin's other tools stay off.
+    tools:
+      include:
+        - "devin_session_*"
+        - "ask_question"
+        - "read_wiki_*"
+    timeout: 120
+    connect_timeout: 30
