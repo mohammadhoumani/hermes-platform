@@ -6,8 +6,8 @@ import { FadeIn } from "@/components/motion";
 import { Alert } from "@/components/ui/alert";
 import { loadBrowserBackend } from "@/lib/backend/browser";
 import { BackendError, type Backend, type OrderKind, type Role, type RoomSnapshot } from "@/lib/backend/types";
+import { AgentStage } from "@/components/office/agent-stage";
 import { initRoom, roomReducer } from "@/lib/room/state";
-import { AgentMap } from "./agent-map";
 import { BrdPanel } from "./brd-panel";
 import { Conversation } from "./conversation";
 import { ActivityFeed } from "./feed";
@@ -129,9 +129,7 @@ export function RoomClient({ snapshot, testRole }: { snapshot: RoomSnapshot; tes
           <BrdPanel project={project} orders={orders} send={send} />
         </div>
         <div className="lg:col-span-7 lg:col-start-6">
-          <Panel title="Who is talking">
-            <AgentMap view={view} />
-          </Panel>
+          <AgentStage view={view} />
         </div>
         <div className="lg:col-span-7 lg:col-start-6">
           <Panel title="Coders">

@@ -1,0 +1,14 @@
+Hermes Platform web app: third-party notices
+
+3D office (apps/web/components/office/)
+
+- three (MIT), https://threejs.org
+- @react-three/fiber (MIT), https://github.com/pmndrs/react-three-fiber
+- @react-three/drei (MIT), https://github.com/pmndrs/drei  (only OrbitControls is used)
+
+The office scene is built from simple shapes (boxes, cylinders, spheres) in code. It has no model, texture or font files.
+
+Hermes3D (MIT): the plan for this project suggests drawing ideas from the open source Hermes3D project. The build
+environment could only reach npm, so no Hermes3D code or assets were fetched or copied. The idea we share with it is
+the general one: a small low-poly office where each agent has a desk. If a later change borrows code or models from
+Hermes3D, copy its MIT licence text here and name the files.
