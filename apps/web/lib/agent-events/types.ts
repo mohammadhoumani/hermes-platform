@@ -160,7 +160,7 @@ export interface PluginLoadedEvent extends EventBase {
   path?: string;
   cloud?: boolean;
 }
-/** Planned (M3): the bridge poller reports Devin sessions as devin_started, devin_progress, devin_pr, devin_done, devin_failed. */
+/** Devin events: devin_started, devin_progress, devin_pr, devin_done, devin_failed. (The bridge poller sends `devin_status`, see below.) */
 export interface DevinEvent extends EventBase {
   type: "devin_started" | "devin_progress" | "devin_pr" | "devin_done" | "devin_failed";
   sid?: string;
@@ -170,6 +170,23 @@ export interface DevinEvent extends EventBase {
   branch?: string;
   pr?: string | number | null;
   url?: string;
+}
+
+/**
+ * Sent by the bridge's Devin poller (hermes/devin/devin_poller.py) whenever the status or the pull request of a Devin
+ * session changes. `sid` is the Devin session id. The reducer turns it into devin_started / devin_pr / devin_done / devin_failed.
+ */
+export interface DevinStatusEvent extends EventBase {
+  type: "devin_status";
+  sid?: string;
+  session_id?: string;
+  project?: string | null;
+  status?: "working" | "blocked" | "finished" | "failed" | "suspended" | "unknown";
+  raw_status?: string;
+  pr?: string | null;
+  pr_url?: string | null;
+  finished?: boolean;
+  text?: string;
 }
 
 export type AgentEvent =
@@ -187,7 +204,8 @@ export type AgentEvent =
   | ApprovalAnswerEvent
   | TurnStoppedEvent
   | PluginLoadedEvent
-  | DevinEvent;
+  | DevinEvent
+  | DevinStatusEvent;
 
 export type AgentEventType = AgentEvent["type"];
 
@@ -291,6 +309,8 @@ export interface Internal {
   laneUsed: Partial<Record<LaneId, number>>;
   laneSeq: number;
   prLane: Record<string, LaneId>;
+  /** Devin session ids (from devin_status) that already finished or failed; later duplicates of them are ignored. */
+  devinEnded?: Record<string, true>;
   /** A BRD file was written in this run (needed before an approval question counts as the gate). */
   brdWritten: boolean;
 }
