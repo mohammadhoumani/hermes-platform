@@ -1,0 +1,30 @@
+{
+  "name": "hermes-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hermes Platform v2: give a software idea on the website, Hermes agents build, test and release it.",
+  "workspaces": [
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22.12.0",
+    "npm": ">=10"
+  },
+  "scripts": {
+    "dev": "npm run -w apps/web dev",
+    "build": "npm run -w apps/web build",
+    "start": "npm run -w apps/web start",
+    "lint": "npm run -w apps/web lint && npm run lint:md",
+    "lint:md": "markdownlint-cli2",
+    "test": "npm run -w apps/web test",
+    "test:e2e": "npm run -w apps/web test:e2e",
+    "test:db": "bash supabase/tests/run.sh",
+    "test:skills": "node hermes/skills/validate.mjs",
+    "test:all": "npm run lint && npm test && npm run test:db && npm run test:skills && npm run build && npm run test:e2e",
+    "screenshots": "npm run -w apps/web screenshots"
+  },
+  "devDependencies": {
+    "js-yaml": "5.5.0",
+    "markdownlint-cli2": "0.23.3"
+  }
+}

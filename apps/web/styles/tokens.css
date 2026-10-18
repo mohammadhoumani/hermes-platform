@@ -1,0 +1,179 @@
+/*
+ * Design tokens for Hermes Platform v2.
+ * Brand palette (docs/palette-reference.png):
+ *   Steel Gray #24213B  Caribbean Green #00CDAB  Texas Rose #FFB64D  Wafer #E4D7CC  Snow #FFFFFF
+ *
+ * Accessibility rules (WCAG AA, enforced by lib/contrast.test.ts which reads THIS file):
+ *  - Caribbean Green and Texas Rose are FILLS. Text on them is steel-900. Never green or rose text on a light background.
+ *  - Green text or links on light backgrounds use green-700 (>= 4.5:1). Red text uses red-700 on light, red-300 on dark.
+ *  - Dark mode: Steel Gray background, Snow/Wafer text, green and rose text are fine (>= 4.5:1).
+ *  - Form borders and the focus ring are >= 3:1 against their background.
+ */
+
+:root {
+  /* ---- Palette: tonal scales, 500 is the brand colour (steel: 900 is the brand colour) ---- */
+  --steel-50: #F4F4F5;
+  --steel-100: #E5E4E7;
+  --steel-200: #CACAD0;
+  --steel-300: #A7A6B1;
+  --steel-400: #878593;
+  --steel-500: #6A687A;
+  --steel-600: #504D62;
+  --steel-700: #3E3C53;
+  --steel-800: #312E47;
+  --steel-900: #24213B;
+
+  --green-50: #E6FAF7;
+  --green-100: #C7F4ED;
+  --green-200: #94EADC;
+  --green-300: #61E0CB;
+  --green-400: #2ED6BA;
+  --green-500: #00CDAB;
+  --green-600: #00AC90;
+  --green-700: #007763;
+  --green-800: #006252;
+  --green-900: #003E33;
+
+  --rose-50: #FFF8ED;
+  --rose-100: #FFEFD8;
+  --rose-200: #FFE0B4;
+  --rose-300: #FFD291;
+  --rose-400: #FFC36D;
+  --rose-500: #FFB64D;
+  --rose-600: #D69941;
+  --rose-700: #996D2E;
+  --rose-800: #705022;
+  --rose-900: #473316;
+
+  --wafer-50: #FCFBFA;
+  --wafer-100: #F9F6F4;
+  --wafer-200: #F4EEEA;
+  --wafer-300: #EEE6DF;
+  --wafer-400: #E9DED5;
+  --wafer-500: #E4D7CC;
+  --wafer-600: #C4B9AF;
+  --wafer-700: #8D857E;
+  --wafer-800: #605A56;
+  --wafer-900: #373431;
+
+  --red-50: #FEEEED;
+  --red-100: #FCD9D7;
+  --red-200: #F9B6B3;
+  --red-300: #F6948F;
+  --red-400: #F3716B;
+  --red-500: #F0524A;
+  --red-600: #C0423B;
+  --red-700: #90312C;
+  --red-800: #6C2521;
+  --red-900: #481916;
+
+  --snow: #FFFFFF;
+
+  /* ---- Semantic tokens: light theme (default) ---- */
+  --canvas: var(--snow);
+  --surface: var(--snow);
+  --surface-2: var(--wafer-200);
+  --fg: var(--steel-900);
+  --muted: var(--steel-500);
+  --line: var(--wafer-500);
+  --line-strong: var(--steel-400);
+  --primary: var(--green-500);
+  --primary-hover: var(--green-400);
+  --on-primary: var(--steel-900);
+  --link: var(--green-700);
+  --attn: var(--rose-500);
+  --attn-hover: var(--rose-400);
+  --on-attn: var(--steel-900);
+  --danger: var(--red-700);
+  --progress: var(--green-700);
+  --focus: var(--steel-900);
+  --header-bg: var(--steel-900);
+  --on-header: var(--snow);
+
+  --chip-neutral-bg: var(--steel-100);
+  --chip-neutral-fg: var(--steel-700);
+  --chip-working-bg: var(--green-100);
+  --chip-working-fg: var(--green-800);
+  --chip-attention-bg: var(--rose-500);
+  --chip-attention-fg: var(--steel-900);
+  --chip-success-bg: var(--green-500);
+  --chip-success-fg: var(--steel-900);
+  --chip-danger-bg: var(--red-100);
+  --chip-danger-fg: var(--red-800);
+
+  color-scheme: light;
+}
+
+/* ---- Dark theme: chosen by the system setting unless the user picked Light ---- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --canvas: var(--steel-900);
+    --surface: var(--steel-800);
+    --surface-2: var(--steel-700);
+    --fg: var(--snow);
+    --muted: var(--wafer-500);
+    --line: var(--steel-600);
+    --line-strong: var(--steel-300);
+    --primary: var(--green-500);
+    --primary-hover: var(--green-400);
+    --on-primary: var(--steel-900);
+    --link: var(--green-400);
+    --attn: var(--rose-500);
+    --attn-hover: var(--rose-400);
+    --on-attn: var(--steel-900);
+    --danger: var(--red-300);
+    --progress: var(--green-500);
+    --focus: var(--green-400);
+    --header-bg: var(--steel-900);
+    --on-header: var(--snow);
+
+    --chip-neutral-bg: var(--steel-700);
+    --chip-neutral-fg: var(--snow);
+    --chip-working-bg: var(--green-900);
+    --chip-working-fg: var(--green-200);
+    --chip-attention-bg: var(--rose-500);
+    --chip-attention-fg: var(--steel-900);
+    --chip-success-bg: var(--green-500);
+    --chip-success-fg: var(--steel-900);
+    --chip-danger-bg: var(--red-900);
+    --chip-danger-fg: var(--red-200);
+
+    color-scheme: dark;
+  }
+}
+
+/* ---- Dark theme: chosen by the toggle (same values as above; a test keeps the two blocks identical) ---- */
+:root[data-theme="dark"] {
+  --canvas: var(--steel-900);
+  --surface: var(--steel-800);
+  --surface-2: var(--steel-700);
+  --fg: var(--snow);
+  --muted: var(--wafer-500);
+  --line: var(--steel-600);
+  --line-strong: var(--steel-300);
+  --primary: var(--green-500);
+  --primary-hover: var(--green-400);
+  --on-primary: var(--steel-900);
+  --link: var(--green-400);
+  --attn: var(--rose-500);
+  --attn-hover: var(--rose-400);
+  --on-attn: var(--steel-900);
+  --danger: var(--red-300);
+  --progress: var(--green-500);
+  --focus: var(--green-400);
+  --header-bg: var(--steel-900);
+  --on-header: var(--snow);
+
+  --chip-neutral-bg: var(--steel-700);
+  --chip-neutral-fg: var(--snow);
+  --chip-working-bg: var(--green-900);
+  --chip-working-fg: var(--green-200);
+  --chip-attention-bg: var(--rose-500);
+  --chip-attention-fg: var(--steel-900);
+  --chip-success-bg: var(--green-500);
+  --chip-success-fg: var(--steel-900);
+  --chip-danger-bg: var(--red-900);
+  --chip-danger-fg: var(--red-200);
+
+  color-scheme: dark;
+}

@@ -1,0 +1,118 @@
+@import "tailwindcss";
+@import "../styles/tokens.css";
+
+/* Only our palette exists as utilities: bg-canvas, text-fg, border-line, bg-primary, ... */
+@theme inline {
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-on-primary: var(--on-primary);
+  --color-link: var(--link);
+  --color-attn: var(--attn);
+  --color-attn-hover: var(--attn-hover);
+  --color-on-attn: var(--on-attn);
+  --color-danger: var(--danger);
+  --color-progress: var(--progress);
+  --color-focus: var(--focus);
+  --color-header: var(--header-bg);
+  --color-on-header: var(--on-header);
+
+  --color-chip-neutral-bg: var(--chip-neutral-bg);
+  --color-chip-neutral-fg: var(--chip-neutral-fg);
+  --color-chip-working-bg: var(--chip-working-bg);
+  --color-chip-working-fg: var(--chip-working-fg);
+  --color-chip-attention-bg: var(--chip-attention-bg);
+  --color-chip-attention-fg: var(--chip-attention-fg);
+  --color-chip-success-bg: var(--chip-success-bg);
+  --color-chip-success-fg: var(--chip-success-fg);
+  --color-chip-danger-bg: var(--chip-danger-bg);
+  --color-chip-danger-fg: var(--chip-danger-fg);
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+html {
+  background: var(--canvas);
+  color: var(--fg);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100vh;
+  background: var(--canvas);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+/* Respect the system "reduce motion" setting: no animation, no smooth scrolling, no transitions. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Markdown (BRD) typography */
+.prose-brd {
+  overflow-wrap: anywhere;
+}
+.prose-brd h1,
+.prose-brd h2,
+.prose-brd h3 {
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 1.25em 0 0.5em;
+}
+.prose-brd h1 { font-size: 1.35rem; }
+.prose-brd h2 { font-size: 1.15rem; }
+.prose-brd h3 { font-size: 1.02rem; }
+.prose-brd > :first-child { margin-top: 0; }
+.prose-brd p,
+.prose-brd ul,
+.prose-brd ol,
+.prose-brd table,
+.prose-brd pre,
+.prose-brd blockquote { margin: 0.6em 0; }
+.prose-brd ul { list-style: disc; padding-left: 1.4em; }
+.prose-brd ol { list-style: decimal; padding-left: 1.4em; }
+.prose-brd a { color: var(--link); text-decoration: underline; text-underline-offset: 2px; }
+.prose-brd code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--surface-2);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+.prose-brd pre { background: var(--surface-2); padding: 0.75rem; border-radius: 8px; overflow-x: auto; }
+.prose-brd pre code { background: transparent; padding: 0; }
+.prose-brd blockquote { border-left: 3px solid var(--line-strong); padding-left: 0.8rem; color: var(--muted); }
+.prose-brd table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
+.prose-brd th,
+.prose-brd td { border: 1px solid var(--line-strong); padding: 0.3rem 0.6rem; text-align: left; }

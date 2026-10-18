@@ -1,0 +1,13 @@
+{
+  "config": {
+    "default": true,
+    "MD013": false,
+    "MD024": { "siblings_only": true },
+    "MD033": false,
+    "MD036": false,
+    "MD041": false,
+    "MD060": false
+  },
+  "globs": ["README.md", "docs/**/*.md", "hermes/skills/**/*.md", "supabase/**/*.md", "apps/web/**/*.md"],
+  "ignores": ["**/node_modules/**", "legacy/**", "**/.next/**", "docs/IMPLEMENTATION_PLAN.md"]
+}
