@@ -8,11 +8,11 @@ import remarkGfm from "remark-gfm";
  * Renders Markdown written by an agent (the BRD). It is treated as untrusted:
  *  - raw HTML is dropped (skipHtml) and the result is sanitised again (rehype-sanitize, GitHub-style allow list)
  *  - only http, https and mailto links survive; links open in a new tab with rel="noopener noreferrer"
- *  - images are never loaded: the alt text is shown instead
+ *  - images are never loaded: the img element is replaced by its alt text (see components.img)
  */
 const schema = {
   ...defaultSchema,
-  tagNames: (defaultSchema.tagNames ?? []).filter((t) => t !== "img" && t !== "input"),
+  tagNames: (defaultSchema.tagNames ?? []).filter((t) => t !== "input"),
 };
 
 const SAFE_PROTOCOLS = /^(https?:|mailto:|#)/i;
