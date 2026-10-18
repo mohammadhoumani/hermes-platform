@@ -1,49 +1,51 @@
 "use client";
 
 import { motion, useReducedMotion, type HTMLMotionProps } from "motion/react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 /**
  * Small motion helpers. When the system asks for reduced motion, they render plain elements
  * with no animation at all (not even a fade).
  */
 
+/**
+ * Fades a block in. This is plain CSS (see .fade-in in globals.css), so server-rendered content is visible
+ * straight away, nothing flashes, and it is switched off by prefers-reduced-motion.
+ */
 export function FadeIn({
   children,
   delay = 0,
-  y = 8,
+  className = "",
+  style,
   ...rest
-}: { children: ReactNode; delay?: number; y?: number } & Omit<HTMLMotionProps<"div">, "children" | "initial" | "animate" | "transition">) {
-  const reduce = useReducedMotion();
-  if (reduce) return <div {...(rest as object)}>{children}</div>;
+}: { children: ReactNode; delay?: number } & Omit<React.HTMLAttributes<HTMLDivElement>, "children">) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.28, delay, ease: "easeOut" }}
-      {...rest}
-    >
+    <div className={`fade-in ${className}`.trim()} style={delay ? { ...style, animationDelay: `${delay}s` } : style} {...rest}>
       {children}
-    </motion.div>
+    </div>
   );
 }
 
-/** A list row that slides in when it is added. */
+/**
+ * Tells which keys appeared after the first render. Rows that were already there when the list was
+ * first drawn must not animate (they are in the server HTML), only rows added later slide in.
+ */
+export function useIsNew(keys: readonly (string | number)[]): (key: string | number) => boolean {
+  const [initial] = useState(() => new Set(keys));
+  return (key) => !initial.has(key);
+}
+
+/** A list row. With fresh, it slides in; otherwise it simply appears. */
 export function ListItem({
   children,
+  fresh = false,
   ...rest
-}: { children: ReactNode } & Omit<HTMLMotionProps<"li">, "children" | "initial" | "animate" | "transition">) {
+}: { children: ReactNode; fresh?: boolean } & Omit<HTMLMotionProps<"li">, "children" | "initial" | "animate" | "transition">) {
   const reduce = useReducedMotion();
-  if (reduce) return <li {...(rest as object)}>{children}</li>;
+  if (reduce || !fresh) return <li {...(rest as object)}>{children}</li>;
   return (
     <motion.li initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.24, ease: "easeOut" }} {...rest}>
       {children}
     </motion.li>
   );
-}
-
-/** Press feedback for buttons. */
-export function usePressProps(): { whileTap?: { scale: number }; transition?: { duration: number } } {
-  const reduce = useReducedMotion();
-  return reduce ? {} : { whileTap: { scale: 0.97 }, transition: { duration: 0.08 } };
 }

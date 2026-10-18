@@ -121,7 +121,7 @@ export function RoomClient({ snapshot, testRole }: { snapshot: RoomSnapshot; tes
         <PhaseRail project={project} />
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-12 lg:items-start">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:items-start [&>*]:min-w-0">
         <div className="lg:sticky lg:top-4 lg:col-span-5 lg:col-start-1 lg:row-span-5 lg:row-start-1">
           <Conversation project={project} orders={orders} says={view.says} send={send} />
         </div>

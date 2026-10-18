@@ -17,7 +17,7 @@ export function StatusChip({ status, className = "" }: { status: ProjectStatus; 
       data-tone={info.tone}
       className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold ${TONE[info.tone]} ${className}`}
     >
-      <span aria-hidden="true" className={`size-1.5 rounded-full bg-current ${info.pulse ? "animate-pulse" : ""}`} />
+      <span aria-hidden="true" className={`size-1.5 rounded-full bg-current ${info.pulse ? "motion-safe:animate-pulse" : ""}`} />
       {info.label}
     </span>
   );

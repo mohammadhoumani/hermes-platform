@@ -122,3 +122,21 @@ body {
 [data-surface="brand-panel"] :focus-visible {
   outline-color: var(--snow);
 }
+
+
+/* Page and block entrance. Off when the person asked for less movement. */
+@keyframes hermes-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .fade-in {
+    animation: hermes-fade-in 0.28s ease-out backwards;
+  }
+}

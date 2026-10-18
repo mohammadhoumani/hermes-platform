@@ -3,7 +3,7 @@ import { createSupabaseBackend } from "./supabase";
 import type { Backend, Role } from "./types";
 
 let live: Backend | null = null;
-let fixture: { role: Role; backend: Backend } | null = null;
+let fixture: { role: Role; backend: Promise<Backend> } | null = null;
 
 /**
  * The Backend for client components. `testRole` is passed down from the server and is null in production.
@@ -11,9 +11,9 @@ let fixture: { role: Role; backend: Backend } | null = null;
  */
 export async function loadBrowserBackend(testRole: Role | null): Promise<Backend> {
   if (process.env.NODE_ENV !== "production" && testRole) {
+    // Keep the promise, not the result: two callers at the same time must share one backend.
     if (!fixture || fixture.role !== testRole) {
-      const { createFixtureBackend } = await import("./fixture");
-      fixture = { role: testRole, backend: createFixtureBackend(testRole) };
+      fixture = { role: testRole, backend: import("./fixture").then((m) => m.createFixtureBackend(testRole)) };
     }
     return fixture.backend;
   }

@@ -15,7 +15,7 @@ function Lane({ id, lane }: { id: (typeof LANES)[number]; lane: LaneView }) {
   return (
     <li data-lane={id} className="rounded-xl border border-line bg-surface p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <h4 className="text-sm font-bold">{AGENTS[id].name}</h4>
+        <h3 className="text-sm font-bold">{AGENTS[id].name}</h3>
         <span className="text-xs text-muted">{stepLabel}</span>
       </div>
       <p className="mt-1 truncate text-sm" title={lane.task}>
@@ -46,7 +46,7 @@ function Lane({ id, lane }: { id: (typeof LANES)[number]; lane: LaneView }) {
 
 export function Lanes({ view }: { view: ViewState }) {
   return (
-    <ul data-testid="lanes" className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3" aria-label="Coders">
+    <ul data-testid="lanes" className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3 [&>*]:min-w-0" aria-label="Coders">
       {LANES.map((id) => (
         <Lane key={id} id={id} lane={view.lanes[id]} />
       ))}

@@ -13,7 +13,7 @@ const CAN_STOP: ProjectStatus[] = ["queued", "discovery", "awaiting_brd_approval
 const CAN_RESUME: ProjectStatus[] = ["stopped", "paused", "failed"];
 
 const CONNECTION: Record<ConnectionState, { text: string; dot: string }> = {
-  live: { text: "Live", dot: "bg-progress" },
+  live: { text: "Updating live", dot: "bg-progress" },
   connecting: { text: "Connecting…", dot: "bg-attn" },
   reconnecting: { text: "Reconnecting… showing the last known state", dot: "bg-attn" },
   offline: { text: "Offline. Showing the last known state", dot: "bg-danger" },

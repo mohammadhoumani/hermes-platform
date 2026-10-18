@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/field";
-import { ListItem } from "@/components/motion";
+import { ListItem, useIsNew } from "@/components/motion";
 import { validateEmail } from "@/lib/auth/validate";
 import { loadBrowserBackend } from "@/lib/backend/browser";
 import { BackendError, type Invite, type Role } from "@/lib/backend/types";
@@ -18,6 +18,7 @@ export function TeamManager({ initial, testRole }: { initial: Invite[]; testRole
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const isNew = useIsNew(initial.map((i) => i.email));
   const [removing, setRemoving] = useState<string | null>(null);
 
   const reload = async () => {
@@ -110,7 +111,7 @@ export function TeamManager({ initial, testRole }: { initial: Invite[]; testRole
         ) : (
           <ul className="mt-3 divide-y divide-line" data-testid="invite-list">
             {invites.map((i) => (
-              <ListItem key={i.email} className="flex flex-wrap items-center justify-between gap-3 py-3" data-testid="invite-row">
+              <ListItem key={i.email} fresh={isNew(i.email)} className="flex flex-wrap items-center justify-between gap-3 py-3" data-testid="invite-row">
                 <div className="min-w-0">
                   <p className="break-all text-sm font-semibold">{i.email}</p>
                   <p className="text-xs text-muted">

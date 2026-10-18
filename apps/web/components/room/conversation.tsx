@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { SendIcon } from "@/components/ui/icons";
-import { ListItem } from "@/components/motion";
+import { ListItem, useIsNew } from "@/components/motion";
 import type { AgentSay } from "@/lib/agent-events/types";
 import { MAX_ORDER_TEXT, type Order, type Project } from "@/lib/backend/types";
 import { buildConversation } from "@/lib/room/conversation";
@@ -15,8 +15,9 @@ export function Conversation({ project, orders, says, send }: { project: Project
   const items = useMemo(() => buildConversation(orders, says), [orders, says]);
   const { run, busy, error } = useAction(send);
   const [text, setText] = useState("");
-  const list = useRef<HTMLOListElement>(null);
+  const list = useRef<HTMLDivElement>(null);
   const last = items[items.length - 1]?.key;
+  const isNew = useIsNew(items.map((i) => i.key));
 
   useEffect(() => {
     const el = list.current;
@@ -37,7 +38,8 @@ export function Conversation({ project, orders, says, send }: { project: Project
       <h2 id="conv-title" className="border-b border-line px-4 py-3 text-lg font-bold">
         Conversation
       </h2>
-      <ol ref={list} role="log" aria-live="polite" aria-label="Messages" className="max-h-[26rem] min-h-40 flex-1 space-y-3 overflow-y-auto px-4 py-3" tabIndex={0}>
+      <div ref={list} role="log" aria-live="polite" aria-label="Messages" className="max-h-[26rem] min-h-40 flex-1 overflow-y-auto px-4 py-3" tabIndex={0}>
+      <ol className="space-y-3">
         {items.length === 0 ? (
           <li className="rounded-xl border border-dashed border-line-strong p-4 text-sm text-muted">
             No messages yet. When the agents have a question, it will show up here.
@@ -45,11 +47,11 @@ export function Conversation({ project, orders, says, send }: { project: Project
         ) : null}
         {items.map((it) =>
           it.side === "system" ? (
-            <ListItem key={it.key} className="text-center text-xs font-semibold text-muted">
+            <ListItem key={it.key} fresh={isNew(it.key)} className="text-center text-xs font-semibold text-muted">
               {it.text}
             </ListItem>
           ) : it.side === "you" ? (
-            <ListItem key={it.key} className="ml-auto max-w-[88%]" data-side="you">
+            <ListItem key={it.key} fresh={isNew(it.key)} className="ml-auto max-w-[88%]" data-side="you">
               <div className="rounded-2xl rounded-br-md bg-primary px-3.5 py-2.5 text-on-primary">
                 {it.label ? <p className="text-xs font-bold opacity-90">{it.label}</p> : null}
                 <p className="whitespace-pre-wrap break-words text-sm">{it.text}</p>
@@ -57,7 +59,7 @@ export function Conversation({ project, orders, says, send }: { project: Project
               <p className="mt-1 text-right text-xs text-muted">{it.status === "done" ? "Delivered" : ORDER_STATUS_TEXT[it.status] ?? it.status}</p>
             </ListItem>
           ) : (
-            <ListItem key={it.key} className="mr-auto max-w-[92%]" data-side="agent" data-kind={it.kind}>
+            <ListItem key={it.key} fresh={isNew(it.key)} className="mr-auto max-w-[92%]" data-side="agent" data-kind={it.kind}>
               <p className="mb-1 text-xs font-bold text-muted">
                 {it.agentName}
                 {it.kind === "question" ? " asks" : ""}
@@ -69,6 +71,7 @@ export function Conversation({ project, orders, says, send }: { project: Project
           ),
         )}
       </ol>
+      </div>
 
       <div className="border-t border-line p-3">
         {released ? (

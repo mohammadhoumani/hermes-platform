@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ListItem } from "@/components/motion";
+import { ListItem, useIsNew } from "@/components/motion";
 import { AGENTS } from "@/lib/agent-events/roster";
 import type { AgentId, FeedItem, FeedTag, ViewState } from "@/lib/agent-events/types";
 import { clockTime } from "@/lib/time";
@@ -22,10 +22,10 @@ function Who({ id }: { id: AgentId }) {
   );
 }
 
-function Row({ item }: { item: FeedItem }) {
+function Row({ item, fresh }: { item: FeedItem; fresh: boolean }) {
   if (item.kind === "phase") {
     return (
-      <ListItem className="flex items-center gap-3 py-1" data-kind="phase">
+      <ListItem fresh={fresh} className="flex items-center gap-3 py-1" data-kind="phase">
         <span aria-hidden="true" className="h-px flex-1 bg-line-strong" />
         <span className="text-xs font-bold uppercase tracking-wide text-muted">{item.text}</span>
         <span aria-hidden="true" className="h-px flex-1 bg-line-strong" />
@@ -35,6 +35,7 @@ function Row({ item }: { item: FeedItem }) {
   const gate = item.kind === "gate";
   return (
     <ListItem
+      fresh={fresh}
       data-kind={item.kind}
       data-tag={item.tag}
       className={`rounded-xl border px-3 py-2 ${gate ? "border-attn bg-surface-2" : "border-line bg-surface"}`}
@@ -62,6 +63,7 @@ export function ActivityFeed({ view }: { view: ViewState }) {
   const box = useRef<HTMLOListElement>(null);
   const items = view.feed.filter((f) => showSteps || !f.quiet).slice(-120);
   const last = items[items.length - 1]?.id;
+  const isNew = useIsNew(items.map((i) => i.id));
 
   // keep the newest line in view, unless the person scrolled up to read
   useEffect(() => {
@@ -87,7 +89,7 @@ export function ActivityFeed({ view }: { view: ViewState }) {
       ) : (
         <ol ref={box} className="max-h-[28rem] space-y-1.5 overflow-y-auto pr-1" tabIndex={0} aria-label="Activity, newest at the bottom">
           {items.map((it) => (
-            <Row key={it.id} item={it} />
+            <Row key={it.id} item={it} fresh={isNew(it.id)} />
           ))}
         </ol>
       )}
