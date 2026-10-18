@@ -741,6 +741,38 @@ class TestDevin(BridgeCase):
 
 
 class TestHelpers(unittest.TestCase):
+    DOCKER_CFG = (
+        'model:\n  default: "claude-sonnet-4-6"\n  provider: "anthropic"\n'
+        'terminal:\n  backend: "docker"\n  cwd: "."  # comment\n  timeout: 600\n'
+        '  docker_forward_env:\n    - "GH_TOKEN"\n  home_mode: "auto"\n'
+        '  docker_volumes:\n    - "/home/ubuntu/hermes-work:/workspace/projects"\n'
+        'delegation:\n  max_iterations: 150\n'
+    )
+
+    def test_docker_workspace_mount(self):
+        d = Path(tempfile.mkdtemp(prefix="hp-cfg-"))
+        self.addCleanup(shutil.rmtree, d, True)
+        (d / "config.yaml").write_text(self.DOCKER_CFG)
+        self.assertEqual(pb.docker_workspace_mount(d / "config.yaml"), ("/home/ubuntu/hermes-work", "/workspace/projects"))
+        (d / "config.yaml").write_text(self.DOCKER_CFG.replace('backend: "docker"', 'backend: "local"'))
+        self.assertIsNone(pb.docker_workspace_mount(d / "config.yaml"))
+        self.assertIsNone(pb.docker_workspace_mount(d / "missing.yaml"))
+
+    def test_docker_workspaces_are_used_by_the_bridge(self):
+        home = Path(tempfile.mkdtemp(prefix="hp-home-"))
+        self.addCleanup(shutil.rmtree, home, True)
+        (home / "config.yaml").write_text(self.DOCKER_CFG)
+        s = pb.load_settings(home, need_secrets=False)
+        self.assertEqual(s["workspaces"], Path("/home/ubuntu/hermes-work/hermes-platform"))
+        self.assertEqual(s["agent_workspaces"], "/workspace/projects/hermes-platform")
+        s["data"] = home / "platform"
+        b = pb.Bridge(s)
+        P = b.new_project("1234abcd-0000-0000-0000-000000000000", "a calculator")
+        self.assertEqual(P["workdir"], "/home/ubuntu/hermes-work/hermes-platform/1234abcd-0000-0000-0000-000000000000")
+        self.assertEqual(P["agent_workdir"], "/workspace/projects/hermes-platform/1234abcd-0000-0000-0000-000000000000")
+        prompt = b.build_prompt(P, {"kind": "start_project", "text": "a calculator"})
+        self.assertIn("Workspace folder: /workspace/projects/hermes-platform/1234abcd", prompt)
+
     def test_parse_wait_seconds(self):
         self.assertAlmostEqual(pb.parse_wait_seconds("Claude AI usage limit reached|1900000600", 1900000000), 600)
         self.assertEqual(pb.parse_wait_seconds("rate limited, try again in 20 minutes", 0), 1200)

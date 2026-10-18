@@ -193,6 +193,37 @@ def hermes_home() -> Path:
     return Path(os.environ.get("HERMES_HOME") or Path.home() / ".hermes")
 
 
+def docker_workspace_mount(config_yaml: Path) -> Optional[tuple]:
+    """When Hermes runs its terminal in Docker, the agents only see the mounted folders. Returns the first
+    (host_dir, container_dir) pair of terminal.docker_volumes, or None for a local terminal."""
+    try:
+        lines = config_yaml.read_text(encoding="utf-8").splitlines()
+    except Exception:
+        return None
+    in_term = in_vols = False
+    backend = None
+    for line in lines:
+        if re.match(r"^\S", line):  # a new top-level key
+            in_term = line.split("#", 1)[0].strip() == "terminal:"
+            in_vols = False
+            continue
+        if not in_term:
+            continue
+        m = re.match(r"^\s{2}backend:\s*[\"']?([\w-]+)", line)
+        if m:
+            backend = m.group(1)
+        if re.match(r"^\s{2}docker_volumes:\s*(#.*)?$", line):
+            in_vols = True
+            continue
+        if in_vols:
+            m = re.match(r"^\s+-\s*[\"']?(/[^:\"']+):(/[^:\"']+?)(?::r[ow])?[\"']?\s*(#.*)?$", line)
+            if m and backend == "docker":
+                return m.group(1).rstrip("/"), m.group(2).rstrip("/")
+            if re.match(r"^\s{2}\S", line):
+                in_vols = False
+    return None
+
+
 def load_settings(home: Optional[Path] = None, need_secrets: bool = True) -> dict:
     home = home or hermes_home()
     data = home / "platform"
@@ -245,6 +276,14 @@ def load_settings(home: Optional[Path] = None, need_secrets: bool = True) -> dic
         "devin_base": os.environ.get("DEVIN_API_BASE") or "",
         "devin_interval": max(1.0, num("HERMES_PLATFORM_DEVIN_INTERVAL", "devin_poll_seconds", DEVIN_INTERVAL)),
     }
+    # Where project folders live: the bridge reads them at the host path, the agents use the path they can see.
+    host_ws, agent_ws = cfg.get("workspaces_dir"), cfg.get("agent_workspaces_dir")
+    if not host_ws:
+        mount = docker_workspace_mount(home / "config.yaml")
+        if mount:
+            host_ws, agent_ws = mount[0] + "/hermes-platform", mount[1] + "/hermes-platform"
+    s["workspaces"] = Path(host_ws) if host_ws else data / "workspaces"
+    s["agent_workspaces"] = agent_ws or str(s["workspaces"])
     if need_secrets:
         missing = [k for k in ("supabase_url", "supabase_key", "write_key", "api_key") if not s[k]]
         if missing:
@@ -339,7 +378,8 @@ class Bridge:
         self.data: Path = s["data"]
         self.state_file = self.data / "bridge_state.json"
         self.events_file = Path(os.environ.get("HERMES_PLATFORM_EVENTS") or self.data / "events.jsonl")
-        self.workspaces = self.data / "workspaces"
+        self.workspaces = Path(s.get("workspaces") or self.data / "workspaces")
+        self.agent_workspaces = str(s.get("agent_workspaces") or self.workspaces)
         self.state: Dict[str, Any] = {"v": 2, "projects": {}, "slot": None, "active": None, "sessions": {}, "outbox": {}, "events_pos": None}
         try:
             self.state.update(json.loads(self.state_file.read_text(encoding="utf-8")))
@@ -454,6 +494,7 @@ class Bridge:
         workdir = self.workspaces / pid
         P = {
             "id": pid, "idea": idea[:4000], "slug": slug, "workdir": str(workdir), "session": None,
+            "agent_workdir": f"{self.agent_workspaces.rstrip('/')}/{pid}",
             "status": "queued", "phase": None, "cycle": 0, "skills": [], "brd_hash": "", "brd_approved": False,
             "flow": {"auto": False, "count": 0}, "pending": [], "paused": None, "resume_status": None,
             "pushed": {}, "cycle_order": None, "waiting_since": None, "stopping": False, "mapped": False,
@@ -496,7 +537,11 @@ class Bridge:
         st = st if st is not None else self.read_state_file(P)
         cands = []
         if st.get("repo_path"):
-            cands.append(Path(st["repo_path"]).expanduser())
+            rp = st["repo_path"]
+            aw = P.get("agent_workdir") or P["workdir"]
+            if rp == aw or rp.startswith(aw.rstrip("/") + "/"):  # a path inside the agents' container
+                rp = P["workdir"] + rp[len(aw):]
+            cands.append(Path(rp).expanduser())
         cands.append(wd / "repo")
         for c in cands:
             try:
@@ -885,10 +930,10 @@ class Bridge:
         kind, text = cmd["kind"], cmd["text"]
         mark = f"\n\n(hermes-project:{P['id']})"
         if kind == "start_project":
-            ctx = START_CONTEXT.format(pid=P["id"], slug=P["slug"], workdir=P["workdir"], extra=self.extra_lines())
+            ctx = START_CONTEXT.format(pid=P["id"], slug=P["slug"], workdir=P.get("agent_workdir") or P["workdir"], extra=self.extra_lines())
             body = f"/sdlc-orchestrator {text}\n\n{ctx}"
         elif kind == "change_request":
-            ctx = CHANGE_CONTEXT.format(pid=P["id"], workdir=P["workdir"], extra=self.extra_lines())
+            ctx = CHANGE_CONTEXT.format(pid=P["id"], workdir=P.get("agent_workdir") or P["workdir"], extra=self.extra_lines())
             body = f"/sdlc-change-request {text}\n\n{ctx}"
         elif kind == "request_brd_changes":
             body = BRD_CHANGES_PROMPT.format(text=text)
