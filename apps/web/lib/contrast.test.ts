@@ -1,9 +1,8 @@
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { contrastRatio, hexToRgb, luminance } from "./contrast";
 
-const css = readFileSync(resolve(__dirname, "../styles/tokens.css"), "utf8");
+const css = readFileSync(new URL("../styles/tokens.css", import.meta.url), "utf8");
 
 /** Take the declarations of the block that starts at `header` (first match), e.g. `:root {`. */
 function blockAfter(header: string): Record<string, string> {
