@@ -25,6 +25,26 @@ for (const scheme of ["light", "dark"] as const) {
       await axe(page);
     });
 
+    test("team page has no accessibility violations (also with a confirmation open)", async ({ page, context }) => {
+      await signInAs(context, "owner");
+      await page.goto("/settings/team");
+      await expect(page.getByTestId("member-row").first()).toBeVisible();
+      await axe(page);
+      await page.getByRole("button", { name: "Remove access for Mia Maker" }).click();
+      await expect(page.getByRole("group", { name: "Confirm removing Mia Maker" })).toBeVisible();
+      await axe(page);
+      await page.getByRole("button", { name: "Yes, remove access for Mia Maker" }).click();
+      await expect(page.getByText("Access removed", { exact: true })).toBeVisible();
+      await axe(page);
+    });
+
+    test("the access-removed page has no accessibility violations", async ({ page, context }) => {
+      await signInAs(context, "removed");
+      await page.goto("/projects");
+      await expect(page.getByRole("heading", { name: "Your access has been removed" })).toBeVisible();
+      await axe(page);
+    });
+
     test("projects list has no accessibility violations", async ({ page, context }) => {
       await signInAs(context, "owner");
       await page.goto("/projects");

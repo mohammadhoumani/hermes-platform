@@ -26,5 +26,5 @@ export function isTestMode(): boolean {
   return process.env.NODE_ENV !== "production" && process.env.HERMES_TEST_MODE === "1";
 }
 
-/** Cookie that stands in for a signed-in user in test mode: "owner" or "member". */
+/** Cookie that stands in for a signed-in user in test mode: "owner", "member", or "removed" (a member whose access was removed). */
 export const TEST_USER_COOKIE = "hermes-test-user";

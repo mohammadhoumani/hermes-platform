@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { AccessRemoved } from "@/components/access-removed";
 import { AppHeader } from "@/components/app-header";
 import { Alert } from "@/components/ui/alert";
 import { SetupNeeded } from "@/components/setup-needed";
@@ -17,6 +18,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </main>
     );
   }
+  if (session.user.disabled) return <AccessRemoved testMode={session.testRole !== null} />;
   return (
     <>
       <AppHeader user={session.user} testMode={session.testRole !== null} />

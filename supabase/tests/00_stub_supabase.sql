@@ -17,7 +17,14 @@ create table if not exists auth.users (
   id                 uuid primary key default gen_random_uuid(),
   email              varchar(255) unique,
   raw_user_meta_data jsonb not null default '{}'::jsonb,
+  banned_until       timestamptz,
   created_at         timestamptz not null default now()
+);
+
+create table if not exists auth.sessions (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references auth.users (id) on delete cascade,
+  created_at timestamptz not null default now()
 );
 
 -- Same logic as Supabase's auth.uid(): read the "sub" claim of the request JWT.

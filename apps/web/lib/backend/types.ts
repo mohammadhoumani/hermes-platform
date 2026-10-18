@@ -30,6 +30,20 @@ export interface CurrentUser {
   email: string;
   displayName: string;
   role: Role;
+  /** True when a team owner removed this person's access. The app then shows a short notice and nothing else. */
+  disabled?: boolean;
+}
+
+/** One person on the team, as the owner sees them in /settings/team. */
+export interface TeamMember {
+  id: string;
+  email: string;
+  displayName: string;
+  role: Role;
+  createdAt: string;
+  /** Set when the person's access was removed. */
+  disabledAt: string | null;
+  projectCount: number;
 }
 
 export interface Project {
@@ -110,6 +124,12 @@ export interface Backend {
   listInvites(): Promise<Invite[]>;
   createInvite(email: string, role: Role): Promise<void>;
   revokeInvite(email: string): Promise<void>;
+  /** Owners only: everybody who has an account, with their email. */
+  listMembers(): Promise<TeamMember[]>;
+  /** Owners only: lock a member out. Their projects are kept and their running work is stopped. */
+  removeMember(memberId: string): Promise<void>;
+  /** Owners only: give a removed member their access back. */
+  restoreMember(memberId: string): Promise<void>;
   /** Subscribes to live changes of one project. Returns an unsubscribe function. */
   subscribeRoom(projectId: string, handlers: RoomHandlers): () => void;
 }

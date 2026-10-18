@@ -16,7 +16,7 @@ export async function readSession(request: NextRequest): Promise<SessionResult> 
 
   if (isTestMode()) {
     const v = request.cookies.get(TEST_USER_COOKIE)?.value;
-    return { response, signedIn: v === "owner" || v === "member" };
+    return { response, signedIn: v === "owner" || v === "member" || v === "removed" };
   }
 
   const env = getSupabaseEnv();

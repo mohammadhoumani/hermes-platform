@@ -5,7 +5,8 @@ export const KANBAN = "22222222-2222-4222-8222-222222222222";
 export const RECIPE = "33333333-3333-4333-8333-333333333333";
 
 /** Test mode: a cookie stands in for being signed in. */
-export async function signInAs(context: BrowserContext, role: "owner" | "member") {
+/** "removed" is a member whose access a team owner took away. */
+export async function signInAs(context: BrowserContext, role: "owner" | "member" | "removed") {
   await context.addCookies([{ name: "hermes-test-user", value: role, url: "http://localhost:3100" }]);
 }
 

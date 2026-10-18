@@ -5,7 +5,7 @@
 import calculatorRun from "@/lib/agent-events/fixtures/calculator-run.json";
 import discoveryRun from "@/lib/agent-events/fixtures/discovery-awaiting-brd.json";
 import type { AgentEvent } from "@/lib/agent-events/types";
-import type { CurrentUser, Invite, Order, PlatformEvent, Project, Role } from "./types";
+import type { CurrentUser, Invite, Order, PlatformEvent, Project, Role, TeamMember } from "./types";
 
 export const FIXTURE_SENTINEL = "FIXTURE_SENTINEL_7f3a9c";
 
@@ -165,11 +165,26 @@ export function buildFixtureProjects(userId: string): FixtureProject[] {
   ];
 }
 
+/** The people on the fixture team. Sam (the fixture member) and Olivia (the fixture owner) are always there. */
+export function buildFixtureMembers(): TeamMember[] {
+  const t = new Date(1760000000 * 1000).toISOString();
+  const row = (u: CurrentUser, projectCount: number): TeamMember => ({
+    id: u.id, email: u.email, displayName: u.displayName, role: u.role, createdAt: t, disabledAt: null, projectCount,
+  });
+  return [
+    row(FIXTURE_USERS.owner, 0),
+    row(FIXTURE_USERS.member, 7),
+    { id: "00000000-0000-4000-8000-0000000000b2", email: "mia.maker@example.test", displayName: "Mia Maker", role: "member", createdAt: t, disabledAt: null, projectCount: 2 },
+    { id: "00000000-0000-4000-8000-0000000000a9", email: "oscar.owner@example.test", displayName: "Oscar Owner", role: "owner", createdAt: t, disabledAt: null, projectCount: 0 },
+  ];
+}
+
 export function buildFixtureInvites(): Invite[] {
   const t = new Date(1760000000 * 1000).toISOString();
   return [
     { email: FIXTURE_USERS.owner.email, role: "owner", createdAt: t, acceptedAt: t },
     { email: FIXTURE_USERS.member.email, role: "member", createdAt: t, acceptedAt: t },
+    { email: "mia.maker@example.test", role: "member", createdAt: t, acceptedAt: t },
     { email: "pat.pending@example.test", role: "member", createdAt: t, acceptedAt: null },
   ];
 }

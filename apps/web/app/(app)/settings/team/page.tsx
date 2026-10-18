@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { TeamManager } from "@/components/team/team-manager";
 import { Alert } from "@/components/ui/alert";
-import type { Invite } from "@/lib/backend/types";
+import type { Invite, TeamMember } from "@/lib/backend/types";
 import { getSession } from "@/lib/backend/session";
 
 export const metadata: Metadata = { title: "Team" };
@@ -21,12 +21,12 @@ export default async function TeamPage() {
     );
   }
 
-  let invites: Invite[];
+  let invites: Invite[] = [];
+  let members: TeamMember[] = [];
   let error: string | null = null;
   try {
-    invites = await session.backend.listInvites();
+    [invites, members] = await Promise.all([session.backend.listInvites(), session.backend.listMembers()]);
   } catch (e) {
-    invites = [];
     error = e instanceof Error ? e.message : "Something went wrong. Please try again.";
   }
 
@@ -34,10 +34,12 @@ export default async function TeamPage() {
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold sm:text-3xl">Team</h1>
-        <p className="mt-1 text-sm text-muted">Hermes is invite only. Add the email address of each person who should have an account.</p>
+        <p className="mt-1 text-sm text-muted">
+          Hermes is invite only. Add the email address of each person who should have an account. You can also take a person&apos;s access away again.
+        </p>
       </div>
       {error ? <Alert tone="danger">{error}</Alert> : null}
-      <TeamManager initial={invites} testRole={session.testRole} />
+      <TeamManager initialInvites={invites} initialMembers={members} meId={session.user.id} testRole={session.testRole} />
     </div>
   );
 }

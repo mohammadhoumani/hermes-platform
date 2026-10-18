@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeAuthError, describeDataError, NOT_INVITED_MESSAGE } from "./messages";
+import { ACCESS_REMOVED_MESSAGE, describeAuthError, describeDataError, NOT_INVITED_MESSAGE } from "./messages";
 import { validateConfirm, validateEmail, validateName, validateNewPassword, validatePassword } from "./validate";
 
 describe("describeAuthError", () => {
@@ -10,6 +10,11 @@ describe("describeAuthError", () => {
   });
   it("does not blame the invite list when signing in", () => {
     expect(describeAuthError({ message: "Database error saving new user" }, "signin")).toBe("Something went wrong. Please try again.");
+  });
+  it("tells a removed person that their access was removed", () => {
+    expect(describeAuthError({ code: "user_banned", message: "User is banned", status: 400 }, "signin")).toBe(ACCESS_REMOVED_MESSAGE);
+    expect(describeAuthError({ message: "User is banned" }, "signin")).toBe(ACCESS_REMOVED_MESSAGE);
+    expect(ACCESS_REMOVED_MESSAGE).toMatch(/team owner/);
   });
   it("handles wrong passwords and unconfirmed emails", () => {
     expect(describeAuthError({ code: "invalid_credentials", message: "Invalid login credentials" }, "signin")).toMatch(/do not match/);
@@ -45,6 +50,9 @@ describe("describeDataError", () => {
   });
   it("explains permission errors", () => {
     expect(describeDataError({ code: "42501", message: "new row violates row-level security policy" })).toBe("You are not allowed to do that.");
+    expect(describeDataError({ code: "42501", message: "Your access has been removed. Ask a team owner if this is a mistake." })).toBe(ACCESS_REMOVED_MESSAGE);
+    expect(describeDataError({ code: "42501", message: "Only owners can remove access." })).toBe("Only team owners can do that.");
+    expect(describeDataError({ code: "P0002", message: "That person was not found." })).toBe("That person was not found.");
   });
   it("explains empty and long text", () => {
     expect(describeDataError({ code: "23514", message: 'violates check constraint "orders_text_required"' })).toMatch(/write a message/);

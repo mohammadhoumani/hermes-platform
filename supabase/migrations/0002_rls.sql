@@ -1,5 +1,7 @@
 -- Hermes Platform v2: row level security and grants.
 -- Idempotent: policies are dropped and re-created.
+-- Order matters: 0005 replaces platform_is_owner() and three policies (disabled people see nothing).
+-- Apply the files in order; never re-run an older file on its own after a newer one.
 --
 -- Rules (see docs/IMPLEMENTATION_PLAN.md section 3):
 --  * A user sees a project only if they own it. Users with profiles.role = 'owner' see every project.

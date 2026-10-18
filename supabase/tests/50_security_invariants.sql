@@ -11,7 +11,7 @@ select t.eq((select count(*) from information_schema.routine_privileges
               where grantee = 'PUBLIC' and routine_schema in ('public', 'platform_private')), 0::bigint,
             'no function in public or platform_private is executable by PUBLIC');
 select t.eq((select count(*) from information_schema.routine_privileges
-              where grantee = 'authenticated' and routine_schema = 'public' and routine_name like 'platform\_%' and routine_name <> 'platform_is_owner'), 0::bigint,
+              where grantee = 'authenticated' and routine_schema = 'public' and routine_name like 'platform\_%' and routine_name not in ('platform_is_owner', 'platform_is_active')), 0::bigint,
             'signed-in users cannot execute any machine RPC');
 select t.eq((select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
               where n.nspname in ('public', 'platform_private') and p.prosecdef

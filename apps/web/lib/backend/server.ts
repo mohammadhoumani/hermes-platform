@@ -21,7 +21,7 @@ export async function getServerBackend(): Promise<ServerBackend | null> {
     const v = (await cookies()).get(TEST_USER_COOKIE)?.value;
     const role: Role = v === "owner" ? "owner" : "member";
     const { createFixtureBackend } = await import("./fixture");
-    return { backend: createFixtureBackend(role), testRole: role };
+    return { backend: createFixtureBackend(role, { removed: v === "removed" }), testRole: role };
   }
   const client = await getServerSupabase();
   return client ? { backend: createSupabaseBackend(client), testRole: null } : null;

@@ -4,7 +4,7 @@
  * so Playwright can check the whole room without a real backend. Never imported in production builds.
  */
 import type { AgentEvent } from "@/lib/agent-events/types";
-import { buildFixtureInvites, buildFixtureProjects, FIXTURE_USERS, type FixtureProject } from "./fixture-data";
+import { buildFixtureInvites, buildFixtureMembers, buildFixtureProjects, FIXTURE_USERS, type FixtureProject } from "./fixture-data";
 import {
   BackendError,
   MAX_ORDER_TEXT,
@@ -24,13 +24,16 @@ type Listener = RoomHandlers;
 export interface FixtureOptions {
   /** Delay for the scripted steps. Default 250 ms. Use 0 in unit tests together with flush(). */
   stepMs?: number;
+  /** Pretend a team owner removed this person's access (the notice page shows instead of the app). */
+  removed?: boolean;
 }
 
 export function createFixtureBackend(role: Role, opts: FixtureOptions = {}): Backend & { flush(): Promise<void> } {
-  const user: CurrentUser = FIXTURE_USERS[role];
+  const user: CurrentUser = { ...FIXTURE_USERS[role], ...(opts.removed ? { disabled: true } : {}) };
   const step = opts.stepMs ?? 250;
   const projects = new Map<string, FixtureProject>(buildFixtureProjects(user.id).map((p) => [p.project.id, p]));
   const invites = buildFixtureInvites();
+  const members = buildFixtureMembers();
   const listeners = new Map<string, Set<Listener>>();
   const timers = new Set<ReturnType<typeof setTimeout>>();
   let pending = 0;
@@ -188,6 +191,24 @@ export function createFixtureBackend(role: Role, opts: FixtureOptions = {}): Bac
       const i = invites.findIndex((x) => x.email === email && !x.acceptedAt);
       if (i < 0) throw new BackendError("This invite cannot be removed. The person may have joined already.");
       invites.splice(i, 1);
+    },
+    async listMembers() {
+      if (role !== "owner") throw new BackendError("Only team owners can do that.");
+      return members.map((m) => ({ ...m }));
+    },
+    async removeMember(memberId) {
+      if (role !== "owner") throw new BackendError("Only team owners can do that.");
+      const m = members.find((x) => x.id === memberId);
+      if (!m) throw new BackendError("That person was not found.");
+      if (m.id === user.id) throw new BackendError("You cannot remove your own access.");
+      if (m.role === "owner") throw new BackendError("Owners cannot be removed here. Ask the person to leave the team, or change their role in the database.");
+      if (!m.disabledAt) m.disabledAt = nowIso();
+    },
+    async restoreMember(memberId) {
+      if (role !== "owner") throw new BackendError("Only team owners can do that.");
+      const m = members.find((x) => x.id === memberId);
+      if (!m) throw new BackendError("That person was not found.");
+      m.disabledAt = null;
     },
     subscribeRoom(id, handlers) {
       const set = listeners.get(id) ?? new Set<Listener>();

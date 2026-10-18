@@ -14,6 +14,7 @@ import {
   type Order,
   type OrderKind,
   type PlatformEvent,
+  type TeamMember,
   type Project,
   type ProjectPhase,
   type ProjectStatus,
@@ -76,6 +77,18 @@ export function mapInvite(r: Row): Invite {
   return { email: str(r.email), role: str(r.role) as Role, createdAt: str(r.created_at), acceptedAt: strOrNull(r.accepted_at) };
 }
 
+export function mapMember(r: Row): TeamMember {
+  return {
+    id: str(r.id),
+    email: str(r.email),
+    displayName: str(r.display_name),
+    role: r.role === "owner" ? "owner" : "member",
+    createdAt: str(r.created_at),
+    disabledAt: strOrNull(r.disabled_at),
+    projectCount: Number(r.project_count ?? 0) || 0,
+  };
+}
+
 function fail(error: unknown): never {
   throw new BackendError(describeDataError(error), error);
 }
@@ -89,7 +102,7 @@ export function createSupabaseBackend(client: SupabaseClient): Backend {
       if (error || !data.user) return null;
       const { data: profile, error: perr } = await client
         .from("profiles")
-        .select("display_name, role")
+        .select("display_name, role, disabled_at")
         .eq("id", data.user.id)
         .maybeSingle();
       if (perr) fail(perr);
@@ -99,6 +112,7 @@ export function createSupabaseBackend(client: SupabaseClient): Backend {
         email,
         displayName: str(profile?.display_name) || email.split("@")[0] || "Me",
         role: profile?.role === "owner" ? "owner" : "member",
+        disabled: Boolean(profile?.disabled_at),
       };
     },
 
@@ -169,6 +183,22 @@ export function createSupabaseBackend(client: SupabaseClient): Backend {
       const { data, error } = await client.from("invites").delete().eq("email", email).select("email");
       if (error) fail(error);
       if (!data || data.length === 0) throw new BackendError("This invite cannot be removed. The person may have joined already.");
+    },
+
+    async listMembers() {
+      const { data, error } = await client.rpc("team_members");
+      if (error) fail(error);
+      return ((data ?? []) as Row[]).map(mapMember);
+    },
+
+    async removeMember(memberId) {
+      const { error } = await client.rpc("remove_member", { member_id: memberId });
+      if (error) fail(error);
+    },
+
+    async restoreMember(memberId) {
+      const { error } = await client.rpc("restore_member", { member_id: memberId });
+      if (error) fail(error);
     },
 
     subscribeRoom(projectId, h: RoomHandlers) {

@@ -17,6 +17,8 @@ function asErrorLike(e: unknown): ErrorLike {
   return {};
 }
 
+export const ACCESS_REMOVED_MESSAGE = "Your access has been removed. Ask a team owner if this is a mistake.";
+
 export const NOT_INVITED_MESSAGE = "This email is not on the invite list. Ask the team owner to invite you, then try again.";
 
 export function describeAuthError(error: unknown, context: AuthContext): string {
@@ -41,6 +43,7 @@ export function describeAuthError(error: unknown, context: AuthContext): string 
   ) {
     return NOT_INVITED_MESSAGE;
   }
+  if (code === "user_banned" || /user is banned|user_banned/.test(msg)) return ACCESS_REMOVED_MESSAGE;
   if (code === "invalid_credentials" || /invalid login credentials/.test(msg)) {
     return "That email and password do not match. Try again, or reset your password.";
   }
@@ -80,6 +83,8 @@ export function describeDataError(error: unknown): string {
     return "We could not reach the server. Check your internet and try again.";
   }
   if (code === "54000" || /too many orders/.test(msg)) return "You are sending too fast. Please wait a few minutes and try again.";
+  if (/access has been removed/.test(msg)) return ACCESS_REMOVED_MESSAGE;
+  if (code === "42501" && /^only owners/.test(msg)) return "Only team owners can do that.";
   if (code === "42501" || /row-level security|permission denied/.test(msg)) return "You are not allowed to do that.";
   if (code === "23505") return "That already exists.";
   if (code === "23514") {
@@ -88,7 +93,7 @@ export function describeDataError(error: unknown): string {
     if (/email/.test(msg)) return "Enter a valid email address.";
     return "That is not allowed. Please check what you wrote.";
   }
-  if (code === "22023" && e.message) return e.message; // our own plain messages from create_project
+  if ((code === "22023" || code === "P0002") && e.message) return e.message; // our own plain messages (create_project, remove_member)
   if (code === "28000") return "Please sign in again.";
   return "Something went wrong. Please try again.";
 }
