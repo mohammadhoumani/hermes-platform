@@ -40,19 +40,45 @@ which phase is running. Load only one phase skill at a time.
 
 ## Steps
 
-1. **Create the repository.** Make a new repository from the project template named in the order.
-   Use the project's short name (the slug). Clone it and work inside the clone.
-2. **Open the Team sync issue.** Create one issue titled `Team sync` and pin it. Agents use it to
-   post blockers and interface questions (see `sdlc-development`). Do this once.
-3. **Tell the user the project started.** One or two sentences: what you understood, and that the
+1. **Create the repository.** The order tells you the **Repository name**, the **Workspace folder**,
+   and (when set) the **GitHub owner** and the **Template repository**. Make a new repository with that
+   name from the template. Clone it into `<Workspace folder>/repo` and work inside that clone.
+   Never use another folder for the project.
+2. **Write the project state file** (see "Project state file" below) right after the clone.
+3. **Open the Team sync issue.** Create one issue titled `Team sync` and pin it. Agents use it to
+   post blockers and interface questions (see `sdlc-development`). Do this once. Write its number
+   into the state file as `sync_issue`.
+4. **Tell the user the project started.** One or two sentences: what you understood, and that the
    analyst will now ask questions.
-4. **Run phase 1.** Load `sdlc-ba`. When it ends its turn asking for approval, stop and wait.
+5. **Run phase 1.** Load `sdlc-ba`. When it ends its turn asking for approval, stop and wait.
    Do not continue until the order `approve_brd` arrives. If the user asks for changes, load
    `sdlc-ba` again and update the BRD.
-5. **Run phases 2 to 6** in order. After each phase, check its "Done when" column yourself by
+6. **Run phases 2 to 6** in order. After each phase, check its "Done when" column yourself by
    looking at the repository (do not trust a summary). If the check fails, send the work back to
    that phase once. If it fails again, stop and report the problem (see "When things go wrong").
-6. **Report the end.** Tell the user the live address and one sentence on what they can do next.
+7. **Report the end.** Tell the user the live address and one sentence on what they can do next.
+
+## Project state file
+
+The website and the bridge read one small file, `<Workspace folder>/project.json`. Keep it up to date
+with `write_file`. It is plain JSON with only these keys (add `sync_issue` if you like; other keys are ignored):
+
+```text
+{
+  "repo_path": "<Workspace folder>/repo",
+  "repo_url": "https://github.com/<owner>/<repository name>",
+  "staging_url": "https://...",
+  "production_url": "https://...",
+  "release_number": 1,
+  "sync_issue": 1
+}
+```
+
+- Write `repo_path` and `repo_url` right after the clone. The BRD is read from `<repo_path>/docs/BRD.md`.
+- `staging_url` is written by QA when it knows the staging address.
+- `production_url` and `release_number` are written by the release phase, **last**, when the site is live.
+  Writing them is how the platform learns the project is released. Do not write them earlier.
+- Never put secrets in this file. Only `http` and `https` addresses.
 
 ## Keep the website informed
 

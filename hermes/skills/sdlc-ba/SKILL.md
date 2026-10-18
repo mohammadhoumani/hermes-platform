@@ -42,7 +42,8 @@ If the user answers "you decide", pick the simplest sensible option and write it
 
 ### 3. Write the BRD
 
-Write `docs/BRD.md` in the repository. Keep it to about two pages. Use exactly these sections:
+Write `docs/BRD.md` in the repository (the clone in the Workspace folder, see `sdlc-orchestrator`).
+The website reads exactly this file after your turn ends, so keep this path and name. Keep it to about two pages. Use exactly these sections:
 
 1. `# Business Requirements: <project name>`
 2. `## Goal` : two or three sentences.

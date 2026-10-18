@@ -13,7 +13,8 @@ BRD works, or you report exactly how it fails.
 ### 1. Wait for the staging deploy
 
 Every merge to `main` creates a staging deploy. Find the staging address from the deployment status
-of the latest `main` commit. Wait until it is ready and its commit matches the latest `main`.
+of the latest `main` commit, and write it into `staging_url` in the project state file
+(`<Workspace folder>/project.json`, see `sdlc-orchestrator`). Wait until it is ready and its commit matches the latest `main`.
 If it is not ready after 15 minutes, report a deploy problem as a bug (see below) and stop the round.
 
 ### 2. Run the automated tests
@@ -30,7 +31,8 @@ in `docs/QA.md` as a table:
 | --- | --- | --- | --- |
 | BR-01 | Typed 20 in the bill field | Pass | screenshot or test name |
 
-Also check, at least: the site works on a phone-sized screen with no sideways scrolling; keyboard
+Start `docs/QA.md` with one line `QA result: passed` or `QA result: failed` (the website shows it),
+then the table. Also check, at least: the site works on a phone-sized screen with no sideways scrolling; keyboard
 only use works; text is readable (contrast); there are no errors in the browser console.
 
 ### 4. File structured bug reports

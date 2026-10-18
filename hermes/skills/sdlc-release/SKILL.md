@@ -47,7 +47,10 @@ Mention known issues from `docs/QA.md` if there are any.
 ### 4. Merge and record
 
 Merge the documentation pull request when checks pass (no review round is needed for documentation).
-Then update the project's links: repository address, staging address, production address.
+Then, as the very last step, update the project state file `<Workspace folder>/project.json`
+(see `sdlc-orchestrator`): keep `repo_path`, `repo_url` and `staging_url`, set `production_url` to the live
+address, and set `release_number` to the previous number plus one (start at 1). The platform marks the
+project as released when it sees this. Do not write these two keys before the site is really live.
 
 ### 5. Tell the user
 

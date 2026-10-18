@@ -13,7 +13,8 @@ the change, because they asked for it.
 
 ### 1. Understand the change
 
-Read the user's request. Read `docs/BRD.md`, `docs/CONTRACT.md`, `docs/PLAN.md` and `docs/QA.md`.
+Read the user's request. The repository is the clone in the Workspace folder named in the order
+(see `sdlc-orchestrator`). Read `docs/BRD.md`, `docs/CONTRACT.md`, `docs/PLAN.md` and `docs/QA.md`.
 Decide what the change touches. If the request is unclear, make the simplest reasonable choice and
 say which in one sentence to the user. Do not interview them.
 
@@ -43,7 +44,8 @@ Merge these documents with a pull request titled `docs: change <number>` once ch
 3. **QA**: load `sdlc-qa`. Test the change **and** re-run the whole checklist, because a change can
    break something that worked. Add rows for the change to `docs/QA.md`.
 4. **Release**: load `sdlc-release`. Promote the new tested commit. Update the README and user
-   guide where the change affects them.
+   guide where the change affects them. At the end, raise `release_number` in the project state file
+   by one (the site address may stay the same). That is how the platform learns the change is live.
 
 ### 4. Tell the user
 

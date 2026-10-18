@@ -57,6 +57,13 @@ Team sync is how coders talk to each other without a human. It is one pinned iss
 - you need to change a shared interface (start with `INTERFACE:` and give the exact before and after),
 - you finish something others depend on (start with `READY:`).
 
+**Post with this exact command**, so the website can show the message (the issue number is `sync_issue`
+in the project state file):
+
+```text
+gh issue comment <sync issue number> --body "<comment>"
+```
+
 **Comment format:**
 
 ```text
@@ -73,12 +80,12 @@ follows the contract, write it in your pull request, and carry on.
 
 Tasks marked `assignee: devin` go to Devin through the Devin MCP tools.
 
-1. Create the Devin session with a prompt that contains everything Devin needs: the repository,
+1. Create the Devin session with the Devin tool `devin_session_create`, with a prompt that contains everything Devin needs: the repository,
    the branch name, the task text, the files it may change, the contract sections it must follow,
    the test and lint commands, and the rule "open a pull request and do not merge it".
 2. Always set `max_acu_limit` on the session. Use the limit given in the order or settings.
    If none is given, use a small limit (for example 5). Never leave it unset.
-3. Check the session until it finishes. Read its pull request like any other coder's.
+3. Check the session until it finishes (talk to it with `devin_session_interact`). Read its pull request like any other coder's.
 4. Treat Devin's questions like Team sync comments: answer them from the contract.
 
 **Fallback:** if the Devin tools are missing, return an error, the session fails, or the limit is
