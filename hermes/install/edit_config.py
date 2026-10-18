@@ -7,6 +7,8 @@ The installer backs the files up first. This script never prints a secret value:
     edit_config.py env-telegram --file .env [--dry-run]    switch off the Telegram variables (names are kept as comments)
     edit_config.py yaml-telegram --file config.yaml [--dry-run]   set telegram.enabled: false and blank its token
     edit_config.py config-json  --file platform/config.json [--dry-run]   write the platform settings (values come from HP_* variables)
+    edit_config.py env-devin    --file .env [--dry-run]    store DEVIN_API_KEY (and DEVIN_ORG_ID) from HP_DEVIN_KEY / HP_DEVIN_ORG, mode 600
+    edit_config.py yaml-devin   --file config.yaml --snippet FILE [--dry-run]   merge the Devin MCP server into mcp_servers
     edit_config.py verify-key   (HP_URL, HP_KEY, HP_WRITE in the environment)   one harmless RPC to check the write key
 
 The last line printed is `RESULT changed` or `RESULT unchanged`. Exit code 0 on success, 2 if the result is not valid.
@@ -286,6 +288,148 @@ def config_json(path: Path, dry: bool) -> bool:
     return differs
 
 
+# --------------------------------------------------------------------------------------------------
+# Devin (optional): the key goes to .env, the MCP server block goes to config.yaml
+# --------------------------------------------------------------------------------------------------
+
+BAD_VALUE_RE = re.compile(r"[\s\"'`$\\#]")
+
+
+def env_devin(path: Path, dry: bool) -> bool:
+    """DEVIN_API_KEY (and DEVIN_ORG_ID) from the environment (HP_DEVIN_KEY, HP_DEVIN_ORG) into .env. Values are never printed."""
+    want = {"DEVIN_API_KEY": os.environ.get("HP_DEVIN_KEY", "")}
+    if os.environ.get("HP_DEVIN_ORG"):
+        want["DEVIN_ORG_ID"] = os.environ["HP_DEVIN_ORG"]
+    if not want["DEVIN_API_KEY"]:
+        print("no Devin key was given", file=sys.stderr)
+        sys.exit(2)
+    for name, val in want.items():
+        if BAD_VALUE_RE.search(val):
+            print(f"{name} has a space, a quote or another odd character. Copy it again without extra characters.", file=sys.stderr)
+            sys.exit(2)
+    lines, nl, mode = read(path) if path.exists() else ([], "\n", 0o600)
+    out: List[str] = []
+    seen: set = set()
+    changed: List[str] = []
+    for l in lines:
+        m = ENV_RE.match(l)
+        if m and not l.lstrip().startswith("#") and m.group(2) in want:
+            name = m.group(2)
+            if name in seen:
+                changed.append(f"removed a second {name} line")
+                continue
+            seen.add(name)
+            if m.group(3).strip().strip('"').strip("'") != want[name]:
+                changed.append(f"updated {name}")
+                out.append(f"{name}={want[name]}")
+                continue
+        out.append(l)
+    for name, val in want.items():
+        if name not in seen:
+            changed.append(f"added {name}")
+            out.append(f"{name}={val}")
+    for c in changed:
+        say(f".env: {c} (value not shown)")
+    if not changed:
+        say(".env: the Devin key is already stored")
+    elif not dry:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        write(path, out, nl, 0o600)
+    elif path.exists() and (mode or 0) & 0o077:
+        say(".env: file permissions would be set to 600")
+    print("RESULT " + ("changed" if changed else "unchanged"))
+    return bool(changed)
+
+
+def devin_block(snippet: Path) -> List[str]:
+    """The lines under `mcp_servers:` in the snippet (the `devin:` server), without comments outside the block."""
+    lines = snippet.read_text(encoding="utf-8").splitlines()
+    for i, l in enumerate(lines):
+        if re.match(r"^mcp_servers\s*:\s*$", l):
+            block: List[str] = []
+            for x in lines[i + 1:]:
+                if x.strip() and indent_of(x) == 0 and not x.lstrip().startswith("#"):
+                    break
+                block.append(x.rstrip())
+            while block and not block[-1].strip():
+                block.pop()
+            if any(re.match(r"^\s+devin\s*:\s*$", x) for x in block):
+                return block
+    print(f"{snippet} has no mcp_servers: devin: block", file=sys.stderr)
+    sys.exit(2)
+
+
+def reindent(block: List[str], to: int) -> List[str]:
+    first = next(x for x in block if x.strip())
+    delta = to - indent_of(first)
+    out = []
+    for x in block:
+        if not x.strip():
+            out.append("")
+        elif delta >= 0:
+            out.append(" " * delta + x)
+        else:
+            out.append(x[min(-delta, indent_of(x)):])
+    return out
+
+
+def yaml_devin(path: Path, dry: bool, snippet: Path) -> bool:
+    """Add mcp_servers.devin from the snippet. An existing devin entry is never touched, so running it again changes nothing."""
+    block = devin_block(snippet)
+    lines, nl, mode = read(path) if path.exists() else ([], "\n", 0o600)
+    out = list(lines)
+    note = f"# Devin MCP server, added by {STAMP}. The key is DEVIN_API_KEY in ~/.hermes/.env"
+    result = ""
+    top = next((i for i, l in enumerate(out) if re.match(r"^mcp_servers\s*:", l)), None)
+    if top is None:
+        if out and out[-1].strip():
+            out.append("")
+        out += [note, "mcp_servers:"] + block
+        result = "added a new mcp_servers section with the devin server"
+    else:
+        rest = re.sub(r"\s+#.*$", "", out[top].split(":", 1)[1]).strip()
+        if rest in ("{}", "null", "~", "Null", "NULL"):
+            out[top:top + 1] = [note, "mcp_servers:"] + block
+            result = "mcp_servers was empty; added the devin server"
+        elif rest:
+            say("config.yaml: mcp_servers is written in an unusual way here, so it was left as it is. Add the devin block by hand (hermes/devin/config.yaml.snippet)")
+        else:
+            end = top + 1
+            while end < len(out) and (not out[end].strip() or out[end].lstrip().startswith("#") or indent_of(out[end]) > 0):
+                end += 1
+            kids = [k for k in range(top + 1, end) if out[k].strip() and not out[k].lstrip().startswith("#")]
+            ci = indent_of(out[kids[0]]) if kids else 2
+            if any(indent_of(out[k]) == ci and re.match(r"^\s*[\"']?devin[\"']?\s*:", out[k]) for k in kids):
+                say("config.yaml: mcp_servers already has a devin server; left as it is")
+            elif kids and out[kids[0]].lstrip().startswith("-"):
+                say("config.yaml: mcp_servers is a list here; left as it is. Add the devin block by hand (hermes/devin/config.yaml.snippet)")
+            else:
+                out[top + 1:top + 1] = [" " * ci + note] + reindent(block, ci)
+                result = "added the devin server to mcp_servers"
+    if result:
+        say("config.yaml: " + result + " (the key is read from DEVIN_API_KEY at run time, it is not written here)")
+        if not dry:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            write(path, out, nl, mode)
+            try:
+                import yaml  # type: ignore
+
+                data = yaml.safe_load(path.read_text(encoding="utf-8"))
+                if not (isinstance(data, dict) and isinstance(data.get("mcp_servers"), dict) and "devin" in data["mcp_servers"]):
+                    raise ValueError("mcp_servers.devin is missing after the change")
+            except ImportError:
+                say("(YAML syntax check skipped: PyYAML is not installed here)")
+            except Exception as e:
+                if lines:
+                    write(path, lines, nl, mode)  # put the original back
+                else:
+                    path.unlink(missing_ok=True)
+                print(f"config.yaml would not be valid after the change ({str(e).splitlines()[0]}). Original restored.", file=sys.stderr)
+                sys.exit(2)
+    print("RESULT " + ("changed" if result else "unchanged"))
+    return bool(result)
+
+
 def verify_key() -> int:
     url, key, write = os.environ.get("HP_URL", ""), os.environ.get("HP_KEY", ""), os.environ.get("HP_WRITE", "")
     if not (url and key and write):
@@ -316,15 +460,21 @@ def verify_key() -> int:
 
 def main(argv: List[str]) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["env-api", "env-telegram", "yaml-telegram", "config-json", "verify-key"])
+    ap.add_argument("cmd", choices=["env-api", "env-telegram", "yaml-telegram", "config-json", "env-devin", "yaml-devin", "verify-key"])
     ap.add_argument("--file")
+    ap.add_argument("--snippet", help="yaml-devin: the config.yaml.snippet file")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args(argv)
     if a.cmd == "verify-key":
         return verify_key()
     if not a.file:
         ap.error("--file is required")
-    {"env-api": env_api, "env-telegram": env_telegram, "yaml-telegram": yaml_telegram, "config-json": config_json}[a.cmd](Path(a.file), a.dry_run)
+    if a.cmd == "yaml-devin":
+        if not a.snippet:
+            ap.error("--snippet is required for yaml-devin")
+        yaml_devin(Path(a.file), a.dry_run, Path(a.snippet))
+        return 0
+    {"env-api": env_api, "env-devin": env_devin, "env-telegram": env_telegram, "yaml-telegram": yaml_telegram, "config-json": config_json}[a.cmd](Path(a.file), a.dry_run)
     return 0
 
 

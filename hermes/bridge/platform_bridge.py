@@ -306,7 +306,12 @@ def load_devin_poller():
         if f.is_file():
             spec = importlib.util.spec_from_file_location("hermes_platform_devin_poller", f)
             mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(mod)
+            saved = sys.dont_write_bytecode
+            sys.dont_write_bytecode = True  # no __pycache__ folder next to the installed bridge
+            try:
+                spec.loader.exec_module(mod)
+            finally:
+                sys.dont_write_bytecode = saved
             return mod
     raise ImportError("devin_poller.py was not found next to the bridge")
 
