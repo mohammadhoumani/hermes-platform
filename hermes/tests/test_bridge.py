@@ -196,6 +196,28 @@ class TestFullRun(BridgeCase):
         self.pump(lambda: mock.order(aid)["status"] == "failed", what="refusal")
         self.assertIn("no BRD", mock.order(aid)["note"])
 
+    def test_brd_read_from_github_when_not_in_the_workspace(self):
+        fake.brain.faults["start_mode"] = ["brd_remote"]
+        asked = []
+        self.bridge.fetch_remote_brd = lambda repo: (asked.append(repo), fake.brain.remote_brd.get(repo))[1]
+        pid, _ = self.new_project()
+        self.until_awaiting(pid)
+        self.assertIn("Business Requirements", mock.project(pid)["brd_markdown"])
+        self.assertTrue(asked and asked[0].startswith("bot/a-tip-calculator"), asked)
+        self.approve_and_release(pid)
+
+    def test_skill_past_the_gate_before_approval_stops_the_run(self):
+        fake.brain.faults["start_mode"] = ["skip_gate"]
+        pid, oid = self.new_project()
+        self.until_awaiting(pid)
+        self.assertEqual(len(fake.stops), 1)
+        p = mock.project(pid)
+        self.assertEqual(p["phase"], "discovery")
+        self.assertIsNone(p["brd_approved_at"])
+        self.assertIn("before the BRD was approved", mock.order(oid)["note"])
+        self.assertNotIn("architecture", mock.history(pid))
+        self.approve_and_release(pid)  # the approval still works afterwards
+
     def test_session_mapping_from_the_order_marker(self):
         fake.alias_sessions = True  # Hermes does not use our session id in its hooks
         pid, _ = self.new_project()
@@ -304,6 +326,25 @@ class TestStopResume(BridgeCase):
         self.pump(lambda: self.status(b) == "stopped", what="B stopped")
         self.pump(lambda: self.status(a) == "released", what="A released")
         self.assertFalse(any("second idea" in i for _, i in fake.inputs), "a stopped, queued project must never start")
+
+    def test_resume_before_the_brd_approval_keeps_the_gate(self):
+        pid, _ = self.new_project()
+        self.until_awaiting(pid)
+        mock.add_order(pid, "stop")
+        self.pump(lambda: self.status(pid) == "stopped", what="stopped")
+        rid = mock.add_order(pid, "resume")
+        self.pump(lambda: mock.order(rid)["status"] in ("done", "failed") and self.status(pid) == "awaiting_brd_approval",
+                  what="back to waiting for the approval")
+        resume = next(i for _, i in fake.inputs if i.startswith("Resume."))
+        self.assertIn("before the user approved the BRD", resume)
+        self.assertIn("Do not plan, build", resume)
+        for _ in range(30):
+            self.bridge.tick()
+            time.sleep(0.03)
+        p = mock.project(pid)
+        self.assertIsNone(p["brd_approved_at"])
+        self.assertNotIn(p["status"], ("architecture", "development", "released"))
+        self.assertIn("Business Requirements", p["brd_markdown"])
 
     def test_stop_with_nothing_running(self):
         pid, oid = self.new_project()

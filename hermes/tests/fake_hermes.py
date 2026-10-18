@@ -109,6 +109,7 @@ class Brain:
         self.faults: dict = {}
         self.brd_version = {}
         self.release_no = {}
+        self.remote_brd = {}  # owner/repo -> docs/BRD.md as GitHub has it
         self.seen = []  # (handler, input first line) in order
 
     def fault(self, key):
@@ -186,9 +187,21 @@ class Brain:
         run.sh('gh issue create --title "Team sync" --body "Agents post blockers here"', f"https://github.com/bot/{slug}/issues/1")
         run.skill("sdlc-ba")
         self.brd_version[sid] = 1
-        run.write("docs/BRD.md", brd_text(1), disk=ws / "repo" / "docs" / "BRD.md")
-        state = {"repo_path": str(ws / "repo"), "repo_url": f"https://github.com/bot/{slug}"}
-        run.write(str(ws / "project.json"), json.dumps(state), disk=ws / "project.json")
+        mode = self.fault("start_mode")
+        if mode == "brd_remote":  # like the real run: the BRD was pushed from a checkout outside the workspace
+            self.remote_brd[f"bot/{slug}"] = brd_text(1)
+            run.write("/tmp/elsewhere/docs/BRD.md", brd_text(1))
+        else:
+            run.write("docs/BRD.md", brd_text(1), disk=ws / "repo" / "docs" / "BRD.md")
+            state = {"repo_path": str(ws / "repo"), "repo_url": f"https://github.com/bot/{slug}"}
+            run.write(str(ws / "project.json"), json.dumps(state), disk=ws / "project.json")
+        if mode == "skip_gate":  # like the real run: the agent goes on to planning without the approval
+            run.skill("sdlc-architect")
+            run.hang(10)
+            if run.cancelled():
+                return
+            run.complete("I went on and planned the work.")
+            return
         msg = "The BRD is ready: 2 business requirements and 1 quality requirement.\nPlease read it on the website, then press Approve BRD, or tell me what to change."
         run.reply(msg)
         run.complete(msg)

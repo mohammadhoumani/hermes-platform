@@ -53,7 +53,9 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import signal
+import subprocess
 import sys
 import time
 import urllib.error
@@ -120,7 +122,9 @@ START_CONTEXT = (
     "as the sdlc-orchestrator skill says.\n"
     "{extra}"
     "The user reads your replies on the website and answers there. The only thing the user approves is the BRD, "
-    "with a button on the website. After your analyst writes docs/BRD.md, ask the user to approve it and stop.)"
+    "with a button on the website. After your analyst writes docs/BRD.md, commit and push it, ask the user to approve "
+    "it and stop. Never load sdlc-architect or any later skill before the user has approved the BRD: the website "
+    "stops the run if that happens.)"
 )
 CHANGE_CONTEXT = (
     "(This order came from the Hermes website. The project is already released. Load the sdlc-change-request skill with "
@@ -145,6 +149,14 @@ RESUME_PROMPT = (
     "Resume. This project was stopped or paused. Continue from the last finished step: look at the repository, "
     "docs/PLAN.md, the open issues and pull requests, and carry on from there. Do not start over."
 )
+RESUME_BEFORE_BRD_PROMPT = (
+    "Resume. This project was stopped or paused before the user approved the BRD. Stay in discovery: load the "
+    "sdlc-ba skill, finish docs/BRD.md if it is not complete (commit and push it), then ask the user to approve the "
+    "BRD and stop. Do not plan, build or load sdlc-architect or any later skill until the user approves the BRD."
+)
+GATE_NOTE = ("The team tried to start the next step before the BRD was approved, so the run was stopped. "
+             "Please read the BRD and approve it, or ask for changes.")
+REPO_RE = re.compile(r"[\w.-]+/[\w.-]+")
 LIMIT_PREFIX = ("(The previous attempt was cut off by a usage limit. If you already did part of this, continue from "
                 "where you stopped; do not start over.)\n\n")
 
@@ -501,19 +513,50 @@ class Bridge:
             pass
         return None
 
-    def read_brd(self, P: dict) -> Optional[str]:
-        d = self.repo_dir(P)
-        if not d:
+    def repo_full(self, P: dict) -> Optional[str]:
+        """owner/name of the project's GitHub repository, from what the agents reported or the naming rule."""
+        cands = [P.get("repo")]
+        url = self.read_state_file(P).get("repo_url") or ""
+        m = re.match(r"https://github\.com/([\w.-]+/[\w.-]+?)(?:\.git)?/?$", url)
+        if m:
+            cands.append(m.group(1))
+        if self.s.get("github_owner") and P.get("slug"):
+            cands.append(f"{self.s['github_owner']}/{P['slug']}")
+        for c in cands:
+            if isinstance(c, str) and REPO_RE.fullmatch(c):
+                return c
+        return None
+
+    def fetch_remote_brd(self, repo: str) -> Optional[str]:
+        """docs/BRD.md from GitHub through the gh CLI (already logged in on the VM). None when it is not there."""
+        gh = shutil.which("gh")
+        if not gh or not REPO_RE.fullmatch(repo):
             return None
-        f = d / "docs" / "BRD.md"
         try:
-            r = f.resolve()
-            if not r.is_file() or (d != r and d not in r.parents):
-                return None
-            text = r.read_text(encoding="utf-8", errors="replace").replace("\x00", "")
-        except Exception:
+            r = subprocess.run([gh, "api", f"repos/{repo}/contents/docs/BRD.md", "-H", "Accept: application/vnd.github.raw"],
+                               capture_output=True, text=True, timeout=25)
+        except Exception as e:
+            log("could not ask GitHub for the BRD:", e)
             return None
-        text = text.strip()
+        return r.stdout if r.returncode == 0 and r.stdout.strip() else None
+
+    def read_brd(self, P: dict) -> Optional[str]:
+        text = None
+        d = self.repo_dir(P)
+        if d:
+            f = d / "docs" / "BRD.md"
+            try:
+                r = f.resolve()
+                if r.is_file() and (d == r or d in r.parents):
+                    text = r.read_text(encoding="utf-8", errors="replace")
+            except Exception:
+                text = None
+        if not (text and text.strip()):
+            repo = self.repo_full(P)
+            text = self.fetch_remote_brd(repo) if repo else None  # the agents may work in a checkout outside the workspace
+        if not text:
+            return None
+        text = text.replace("\x00", "").strip()
         if not text:
             return None
         return text if len(text) <= 190000 else text[:190000] + "\n\n(The rest of this document was cut off.)"
@@ -664,8 +707,8 @@ class Bridge:
         if typ == "skill":
             self.on_skill(P, ev.get("name") or "")
         elif typ == "turn_start":
-            for name in ev.get("skills") or []:
-                self.on_skill(P, name)
+            for name in ev.get("skills") or []:  # names mentioned in a message, not skills really loaded
+                self.on_skill(P, name, enforce_gate=False)
         elif typ == "tool_end":
             for a in ev.get("actions") or []:
                 if not isinstance(a, dict):
@@ -673,10 +716,11 @@ class Bridge:
                 if a.get("action") == "deploy" and isinstance(a.get("url"), str) and URL_RE.match(a["url"]) and not BAD_HOST_RE.match(a["url"]):
                     if a.get("env") in ("staging", "production"):
                         P["seen_deploy"][a["env"]] = a["url"]
-                elif a.get("action") == "repo" and isinstance(a.get("repo"), str) and re.fullmatch(r"[\w.-]+/[\w.-]+", a["repo"]):
+                elif a.get("action") == "repo" and isinstance(a.get("repo"), str) and REPO_RE.fullmatch(a["repo"]):
+                    P["repo"] = a["repo"]
                     self.set_project(P["id"], repo_url="https://github.com/" + a["repo"])
 
-    def on_skill(self, P: dict, name: str):
+    def on_skill(self, P: dict, name: str, enforce_gate: bool = True):
         stage = SKILL_STAGE.get(name)
         if not stage:
             return
@@ -685,11 +729,23 @@ class Bridge:
         if stage == "kickoff" or P["status"] not in ACTIVE_STATUSES:
             return
         if stage != "discovery" and not P["brd_approved"]:
-            return  # nothing may move past discovery before the user approved the BRD
+            if enforce_gate:
+                self.block_gate(P, name)  # nothing may move past discovery before the user approved the BRD
+            return
         cur = PHASE_ORDER.index(P["phase"]) if P.get("phase") in PHASE_ORDER else -1
         if PHASE_ORDER.index(stage) > cur:
             self.set_status(P, STATUS_FOR_PHASE[stage], stage)
             log(f"project {P['id'][:8]}: {stage}")
+
+    def block_gate(self, P: dict, skill: str):
+        """The agents loaded a later-phase skill before the BRD was approved: stop the run (once)."""
+        act = self.state.get("active")
+        if P.get("gate_stop") or not act or act.get("pid") != P["id"] or act.get("final"):
+            return
+        P["gate_stop"] = True
+        P["flow"] = {"auto": False, "count": 0}
+        code, _ = self.api("POST", f"/v1/runs/{act['run']}/stop", {})
+        log(f"project {P['id'][:8]}: {skill} was loaded before the BRD was approved; stopping the run ({code})")
 
     # ---- orders ---------------------------------------------------------------------------------
     def handle_order(self, o: dict):
@@ -778,7 +834,8 @@ class Bridge:
             return
         P["flow"] = {"auto": bool(P["brd_approved"] and self.s["auto_after_brd"]), "count": 0}
         P["cycle_order"] = oid if P["flow"]["auto"] else None
-        self.add_cmd(P, {"id": oid, "kind": "resume", "text": RESUME_PROMPT, "cycle": P["flow"]["auto"]})
+        text = RESUME_PROMPT if P["brd_approved"] else RESUME_BEFORE_BRD_PROMPT
+        self.add_cmd(P, {"id": oid, "kind": "resume", "text": text, "cycle": P["flow"]["auto"]})
 
     # ---- pause (usage limits) ---------------------------------------------------------------------
     def enter_pause(self, P: dict, cmd: dict, text: str):
@@ -966,6 +1023,11 @@ class Bridge:
         if P is None:
             return
         log(f"run {act['run']} {status}")
+        if P.get("gate_stop"):  # stopped by the BRD gate, not by the user: wait for the approval
+            P["gate_stop"] = False
+            P["stopping"] = False
+            self.on_completed(P, cmd, GATE_NOTE)
+            return
         if P["stopping"]:
             P["stopping"] = False
             if cmd.get("id") is not None and not cmd.get("cycle"):
