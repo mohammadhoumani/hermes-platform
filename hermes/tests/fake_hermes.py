@@ -238,7 +238,8 @@ class Brain:
             if self.apply_fault(run, "qa"):
                 return
             run.skill("sdlc-review")
-            run.sh("gh pr review 1 --approve --body ok")
+            run.sh("gh pr checks 1")
+            run.sh('gh pr comment 1 --body "Review: approved\nChecked: tests, security. CI is green."')
             run.sh("gh pr merge 1 --squash --delete-branch")
             run.skill("sdlc-qa")
             run.write("docs/QA.md", "QA result: passed\n\n| ID | Result |\n| --- | --- |\n| BR-01 | Pass |\n")
