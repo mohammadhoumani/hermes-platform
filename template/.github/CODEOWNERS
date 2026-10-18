@@ -1,0 +1,7 @@
+# Optional. Code owners are asked to review changes to these files.
+# They only block a merge if branch protection requires code owner review
+# (scripts/protect-main.sh does not turn that on, because all agents share one GitHub account).
+# Replace @OWNER with a real user or team, or delete this file.
+# /.github/ @OWNER
+# /scripts/ @OWNER
+# /docs/CONTRACT.md @OWNER

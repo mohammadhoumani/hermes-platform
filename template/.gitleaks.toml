@@ -1,0 +1,17 @@
+# Secret scan settings (gitleaks). Used by the "secret-scan" job in .github/workflows/ci.yml.
+# Start from the built-in rules, then add only what this project needs.
+title = "Hermes project gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Files that cannot hold a real secret"
+paths = [
+  '''package-lock\.json$''',
+  '''(^|/)node_modules/''',
+  '''(^|/)dist/''',
+  '''(^|/)playwright-report/''',
+]
+# Do NOT allow-list a real-looking key to make a check pass. Use an obviously fake value in tests
+# (for example "test-key-not-real") and keep it short and clearly fake.

@@ -1,0 +1,86 @@
+# CI: runs on every pull request and on every push to main.
+# The three job names below are the required checks of branch protection (scripts/protect-main.sh).
+# If you rename a job, change the check list in that script too.
+# The Reviewer agent reads the result with:  gh pr checks <number>
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: build-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Set up Node
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # Runs only if the project has a "lint" script in package.json.
+      - name: Lint
+        run: npm run lint --if-present
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  secret-scan:
+    name: secret-scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 0
+
+      # Needs no licence for repositories owned by a personal account.
+      # For a repository owned by an organization, add the GITLEAKS_LICENSE secret.
+      - name: Scan for secrets
+        uses: gitleaks/gitleaks-action@v2.3.9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+          GITLEAKS_ENABLE_COMMENTS: "false"
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
+
+  dep-audit:
+    name: dep-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Set up Node
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: 22
+
+      # Fails on high and critical findings in production dependencies. Needs package-lock.json.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high

@@ -1,0 +1,18 @@
+/* Replace these with the design tokens from docs/CONTRACT.md. */
+:root {
+  --bg: #ffffff;
+  --text: #24213b;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, sans-serif;
+}
+
+main {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
