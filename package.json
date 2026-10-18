@@ -20,9 +20,10 @@
     "test:e2e": "npm run -w apps/web test:e2e",
     "test:db": "bash supabase/tests/run.sh",
     "test:skills": "node hermes/skills/validate.mjs && node --test hermes/skills/validate.test.mjs",
-    "test:all": "npm run lint && npm test && npm run test:db && npm run test:skills && npm run test:hermes && npm run build && npm run test:e2e",
+    "test:all": "npm run lint && npm test && npm run test:db && npm run test:skills && npm run test:hermes && npm run test:template && npm run build && npm run test:e2e",
     "screenshots": "npm run -w apps/web screenshots",
-    "test:hermes": "bash hermes/tests/run.sh"
+    "test:hermes": "bash hermes/tests/run.sh",
+    "test:template": "bash tests/template/run.sh"
   },
   "devDependencies": {
     "js-yaml": "5.5.0",
