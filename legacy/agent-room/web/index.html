@@ -1,0 +1,1387 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Hermes Agent Room</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: control-room board. Pipeline rail on top, agent map + conversation side by side, developer lanes below. */
+:root {
+  --bg: #EDF0F4;
+  --surface: #FFFFFF;
+  --surface-2: #F5F7FA;
+  --ink: #14202F;
+  --muted: #586679;
+  --line: #D4DBE4;
+  --line-strong: #A9B4C2;
+  --accent: #3F4BC4;
+  --ok: #1F7A45;  --ok-bg: #E3F3E9;
+  --warn: #A86200; --warn-bg: #FCF1DE;
+  --bad: #BE3434; --bad-bg: #FBE6E6;
+  --a-human: #A86200;
+  --a-orch: #3F4BC4;
+  --a-req: #0B7F80;
+  --a-plan: #7C45BD;
+  --a-dev1: #2470BD;
+  --a-dev2: #C2521B;
+  --a-dev3: #24834C;
+  --a-rev: #AE2F6F;
+  --a-rel: #5E6A0E;
+  --a-gh: #3B4656;
+  --f-display: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F1520; --surface: #161E2B; --surface-2: #1C2533; --ink: #E4E9F0; --muted: #94A1B3;
+    --line: #2A3546; --line-strong: #46546A; --accent: #8C95F5;
+    --ok: #5CC88A; --ok-bg: #12301F; --warn: #F0A940; --warn-bg: #3A2A10; --bad: #F07575; --bad-bg: #3A1717;
+    --a-human: #F0A940; --a-orch: #8C95F5; --a-req: #3CC3C3; --a-plan: #B48BEB; --a-dev1: #63A8F0;
+    --a-dev2: #F08A55; --a-dev3: #5CC88A; --a-rev: #EC79B0; --a-rel: #B8C65A; --a-gh: #C3CCD8;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F1520; --surface: #161E2B; --surface-2: #1C2533; --ink: #E4E9F0; --muted: #94A1B3;
+  --line: #2A3546; --line-strong: #46546A; --accent: #8C95F5;
+  --ok: #5CC88A; --ok-bg: #12301F; --warn: #F0A940; --warn-bg: #3A2A10; --bad: #F07575; --bad-bg: #3A1717;
+  --a-human: #F0A940; --a-orch: #8C95F5; --a-req: #3CC3C3; --a-plan: #B48BEB; --a-dev1: #63A8F0;
+  --a-dev2: #F08A55; --a-dev3: #5CC88A; --a-rev: #EC79B0; --a-rel: #B8C65A; --a-gh: #C3CCD8;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--f-body); font-size: 14px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 40px;
+}
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 14px; }
+h1, h2 { font-family: var(--f-display); margin: 0; text-wrap: balance; }
+button, select, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mono { font-family: var(--f-mono); }
+
+/* Header */
+.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; }
+.brand h1 { font-size: clamp(24px, 3.4vw, 34px); font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+.brand p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+.brand p .mono { color: var(--ink); }
+.seg { display: inline-flex; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 3px; gap: 2px; }
+.seg button { border: 0; background: transparent; padding: 6px 14px; border-radius: 999px; cursor: pointer; font-weight: 500; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+
+/* Live panel */
+.live { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; display: grid; gap: 10px; }
+.live form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.field { display: grid; gap: 4px; min-width: 0; flex: 1 1 160px; }
+.field label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
+.field input { background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-family: var(--f-mono); font-size: 13px; width: 100%; }
+.live .note { margin: 0; color: var(--muted); font-size: 12.5px; }
+.live .status { margin: 0; font-size: 13px; }
+.live .status.err { color: var(--bad); }
+.live .status.ok { color: var(--ok); }
+
+.btn { border: 1px solid var(--line-strong); background: var(--surface); border-radius: 8px; padding: 7px 14px; cursor: pointer; font-weight: 500; white-space: nowrap; }
+.btn:hover { border-color: var(--ink); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.gate { background: var(--warn); border-color: var(--warn); color: var(--surface); font-weight: 600; }
+.btn:disabled { opacity: .5; cursor: default; }
+
+/* Pipeline rail */
+.rail-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
+.rail { list-style: none; margin: 0; padding: 0; display: flex; align-items: center; min-width: 760px; }
+.rail li { display: flex; align-items: center; }
+.rail .conn { flex: 1 1 auto; height: 2px; background: var(--line); min-width: 14px; }
+.rail .conn.done { background: var(--ok); }
+.stage { display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-2); }
+.stage .dot { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-family: var(--f-mono); font-size: 11px; font-weight: 600; background: var(--surface); border: 1.5px solid var(--line-strong); color: var(--muted); }
+.stage .nm { font-weight: 600; font-size: 13px; color: var(--muted); }
+.stage.active { border-color: var(--c); background: color-mix(in srgb, var(--c) 12%, var(--surface)); }
+.stage.active .dot { background: var(--c); border-color: var(--c); color: var(--surface); }
+.stage.active .nm { color: var(--ink); }
+.stage.done .dot { background: var(--ok-bg); border-color: var(--ok); color: var(--ok); }
+.stage.done .nm { color: var(--ink); }
+.gatepin { font-family: var(--f-mono); font-size: 11px; font-weight: 600; padding: 3px 7px; border-radius: 6px; border: 1.5px dashed var(--line-strong); color: var(--muted); background: var(--surface); }
+.gatepin.waiting { border-style: solid; border-color: var(--warn); background: var(--warn-bg); color: var(--warn); }
+.gatepin.approved { border-style: solid; border-color: var(--ok); background: var(--ok-bg); color: var(--ok); }
+
+/* Controls + stats */
+.bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 20px; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.controls select { background: var(--surface); border: 1px solid var(--line-strong); border-radius: 8px; padding: 6px 8px; }
+.check { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; cursor: pointer; }
+.clock { font-family: var(--f-mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.clock b { color: var(--ink); font-weight: 600; }
+.stats { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; }
+.stats div { display: flex; align-items: baseline; gap: 6px; }
+.stats dt { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; order: 2; }
+.stats dd { margin: 0; font-family: var(--f-mono); font-weight: 600; font-size: 16px; font-variant-numeric: tabular-nums; }
+
+/* Main grid */
+.grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); min-width: 0; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.panel-head h2 { font-size: 15px; font-weight: 700; }
+.panel-head span { color: var(--muted); font-size: 12px; }
+
+.now { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 10px 16px; min-height: 52px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
+.now p { margin: 0; flex: 1 1 220px; min-width: 0; font-size: 13.5px; }
+.now.waiting { background: var(--warn-bg); }
+.now.waiting p { color: var(--ink); font-weight: 500; }
+.map { display: block; width: 100%; height: auto; padding: 6px 4px 10px; }
+.map text { font-family: var(--f-body); }
+.map .lbl { font-size: 13px; font-weight: 600; fill: var(--ink); }
+.map .st { font-size: 10.5px; fill: var(--muted); font-family: var(--f-mono); }
+.map .st.active { fill: var(--ink); }
+.map .st.done { fill: var(--ok); }
+.map .st.waiting { fill: var(--warn); font-weight: 600; }
+.map .core { fill: var(--surface); stroke-width: 2.5; transition: fill .25s; }
+.map .ini { font-family: var(--f-mono); font-size: 13px; font-weight: 600; transition: fill .25s; }
+.map .halo { opacity: 0; transition: opacity .3s; }
+.map .node.active .halo { opacity: .18; }
+.map .node.waiting .halo { opacity: .28; animation: breathe 1.6s ease-in-out infinite; }
+.map .node.done .core { fill: var(--surface-2); }
+.map .badge { opacity: 0; transition: opacity .25s; }
+.map .node.done .badge { opacity: 1; }
+.map .hub { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 3 5; fill: none; }
+.map .talk { stroke: var(--line-strong); stroke-width: 2; fill: none; transition: stroke .3s, stroke-width .3s; }
+.map .talk.hot { stroke-width: 3; }
+.map .packet { filter: drop-shadow(0 0 4px currentColor); }
+@keyframes breathe { 50% { opacity: .08; } }
+@keyframes pop { 0% { transform: scale(1); } 40% { transform: scale(1.12); } 100% { transform: scale(1); } }
+.map .node.pop .core-g { animation: pop .35s ease-out; transform-box: fill-box; transform-origin: center; }
+
+/* Feed */
+.feed-panel { display: flex; flex-direction: column; max-height: 660px; }
+.feed { list-style: none; margin: 0; padding: 10px 12px 14px; overflow-y: auto; display: grid; gap: 8px; align-content: start; flex: 1 1 auto; min-height: 280px; }
+.feed .empty { color: var(--muted); padding: 20px 6px; font-size: 13px; }
+.msg { border: 1px solid var(--line); border-left: 3px solid var(--c, var(--line-strong)); border-radius: 8px; padding: 8px 10px; background: var(--surface); display: grid; gap: 3px; animation: slide .25s ease-out; }
+.msg.handoff { background: color-mix(in srgb, var(--c) 7%, var(--surface)); }
+.msg .who { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; font-size: 12px; }
+.msg p { margin: 0; font-size: 13.5px; overflow-wrap: anywhere; }
+.msg p a { color: var(--accent); }
+.msg .meta { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--muted); font-family: var(--f-mono); }
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: 999px; font-weight: 600; font-size: 12px; color: var(--c); background: color-mix(in srgb, var(--c) 13%, transparent); }
+.chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--c); }
+.arrow { color: var(--muted); }
+.tag { text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+.tag.t-handoff { color: var(--accent); }
+.tag.t-ci { color: var(--ok); }
+.tag.t-ci-fail, .tag.t-changes { color: var(--bad); }
+.tag.t-gate { color: var(--warn); }
+.stagebreak { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; padding: 6px 2px 0; }
+.stagebreak::before, .stagebreak::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.gatecard { border: 1.5px solid var(--warn); background: var(--warn-bg); border-radius: 8px; padding: 10px 12px; display: grid; gap: 6px; animation: slide .25s ease-out; }
+.gatecard .gh { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.gatecard .gid { font-family: var(--f-mono); font-size: 11px; padding: 2px 6px; border-radius: 5px; background: var(--warn); color: var(--surface); }
+.gatecard ul { margin: 0; padding-left: 18px; font-size: 13px; color: var(--ink); }
+.gatecard .gf { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.gatecard .gs { font-size: 12px; color: var(--warn); font-weight: 600; }
+.gatecard.approved { border-color: var(--ok); background: var(--ok-bg); }
+.gatecard.approved .gid { background: var(--ok); }
+.gatecard.approved .gs { color: var(--ok); }
+.gatecard.approved .btn { display: none; }
+@keyframes slide { from { opacity: .3; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* Lanes */
+.lanes { padding: 6px 16px 14px; display: grid; gap: 4px; }
+.lane-head, .lane { display: grid; grid-template-columns: 96px minmax(0, 1.3fr) minmax(0, 2fr) 250px; gap: 14px; align-items: center; }
+.lane-head { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; padding: 6px 0 2px; }
+.lane-head .steps-l { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.lane { padding: 10px 0; border-top: 1px solid var(--line); }
+.lane .task { min-width: 0; }
+.lane .task b { display: block; font-weight: 500; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lane .task code { font-family: var(--f-mono); font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.steps { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.steps i { height: 8px; border-radius: 3px; background: var(--surface-2); border: 1px solid var(--line); }
+.steps i.on { background: var(--c); border-color: var(--c); }
+.steps i.cur { background: var(--c); border-color: var(--c); animation: breathe 1.4s ease-in-out infinite; }
+.steps i.fin { background: var(--ok); border-color: var(--ok); }
+.lane .now-step { display: none; font-size: 12px; color: var(--muted); }
+.pills { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end; }
+.pill { font-family: var(--f-mono); font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); }
+.pill.ok { background: var(--ok-bg); color: var(--ok); border-color: transparent; }
+.pill.run { background: var(--warn-bg); color: var(--warn); border-color: transparent; }
+.pill.bad { background: var(--bad-bg); color: var(--bad); border-color: transparent; }
+
+.foot { color: var(--muted); font-size: 12.5px; margin: 0; max-width: 80ch; }
+
+/* Live stream */
+.stream { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.conn-state { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; }
+.conn-state::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--line-strong); }
+.conn-state.on { color: var(--ok); }
+.conn-state.on::before { background: var(--ok); box-shadow: 0 0 0 4px var(--ok-bg); animation: breathe 2s ease-in-out infinite; }
+.conn-state.wait { color: var(--warn); }
+.conn-state.wait::before { background: var(--warn); }
+.conn-state.off { color: var(--bad); }
+.conn-state.off::before { background: var(--bad); }
+.msg.action { padding: 5px 10px; gap: 1px; background: var(--surface-2); border-left-width: 2px; }
+.msg.action p { font-size: 12.5px; font-family: var(--f-mono); color: var(--ink); }
+.msg.action .who { font-size: 11px; }
+.msg.action .chip { font-size: 11px; }
+.tag.t-error { color: var(--bad); }
+.tag.t-telegram, .tag.t-reply { color: var(--a-human); }
+.pill.done { background: var(--ok-bg); color: var(--ok); border-color: transparent; }
+.tag.t-web { color: var(--accent); }
+
+/* Order box (send work to the agents from the website) */
+.live form.order { display: grid; gap: 10px; padding-top: 4px; align-items: stretch; }
+.order-label { font-family: var(--f-display); font-weight: 700; font-size: 15px; }
+.order-row { display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap; }
+.order textarea { flex: 1 1 320px; min-width: 0; resize: vertical; min-height: 64px; background: var(--surface-2); border: 1px solid var(--line-strong);
+  border-radius: 8px; padding: 10px 12px; font: 14px/1.5 var(--f-body); color: var(--ink); }
+.order textarea:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
+.order-btns { display: flex; flex-direction: column; gap: 6px; }
+.order-btns .btn { width: 100%; }
+.order-quick { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12.5px; color: var(--muted); }
+.qbtn { border: 1px solid var(--line-strong); background: var(--surface); border-radius: 999px; padding: 3px 11px; font-size: 12.5px; cursor: pointer; }
+.qbtn:hover { border-color: var(--ink); }
+.qbtn.warn { border-color: var(--warn); color: var(--warn); }
+.orders { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.orders li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; align-items: baseline; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); font-size: 13px; }
+.orders .otext { overflow-wrap: anywhere; }
+.orders .onote { grid-column: 2; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.orders .oact { grid-column: 2; display: flex; gap: 6px; margin-top: 4px; }
+.pill.s-queued, .pill.s-taken { background: var(--surface); color: var(--muted); }
+.pill.s-running { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); border-color: transparent; }
+.pill.s-waiting { background: var(--warn-bg); color: var(--warn); border-color: transparent; }
+.pill.s-done { background: var(--ok-bg); color: var(--ok); border-color: transparent; }
+.pill.s-failed { background: var(--bad-bg); color: var(--bad); border-color: transparent; }
+.gatecard .gbtns { display: flex; gap: 6px; flex-wrap: wrap; }
+@media (max-width: 640px) { .order-btns { flex-direction: row; flex: 1 1 100%; } }
+
+@media (max-width: 920px) {
+  .grid { grid-template-columns: minmax(0, 1fr); }
+  .feed-panel { max-height: 520px; }
+}
+@media (max-width: 640px) {
+  .lane-head { display: none; }
+  .lane { grid-template-columns: 1fr; gap: 6px; }
+  .lane .now-step { display: block; }
+  .pills { justify-content: flex-start; }
+  .stats dd { font-size: 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>Hermes Agent Room</h1>
+      <p id="subtitle">Example run · <span class="mono">tip-calculator</span> · sample data</p>
+    </div>
+    <div class="seg" role="group" aria-label="Data source">
+      <button type="button" id="modeStream" aria-pressed="false">Live</button>
+      <button type="button" id="modeDemo" aria-pressed="true">Example run</button>
+      <button type="button" id="modeLive" aria-pressed="false">Repo history</button>
+    </div>
+  </header>
+
+  <section class="live" id="streamPanel" hidden>
+    <div class="stream">
+      <span class="conn-state" id="connState" role="status">Not connected</span>
+      <span class="clock" id="streamInfo"></span>
+      <label class="check" for="showTools"><input type="checkbox" id="showTools"> Show every tool call</label>
+      <button class="btn" type="button" id="btnClear">Clear board</button>
+    </div>
+    <p class="note" id="streamNote">Shows your Hermes agents as they work, straight from the agent-room plugin on your server. The board starts fresh each time you run /sdlc-project.</p>
+    <form class="order" id="orderForm" hidden>
+      <label class="order-label" for="orderText">Give the agents an order</label>
+      <div class="order-row">
+        <textarea id="orderText" rows="2" maxlength="4000" placeholder="Create a calculator web app with a history of past results"></textarea>
+        <div class="order-btns">
+          <button class="btn primary" type="submit" id="orderProject">Start new project</button>
+          <button class="btn" type="button" id="orderReply">Send reply</button>
+        </div>
+      </div>
+      <div class="order-quick">Quick replies:
+        <button class="qbtn" type="button" data-say="Approve">Approve</button>
+        <button class="qbtn" type="button" data-fill="Please change this: ">Ask for changes</button>
+        <button class="qbtn warn" type="button" data-kind="stop">Stop the run</button>
+      </div>
+      <p class="status" id="orderStatus" role="status"></p>
+      <ol class="orders" id="orders" aria-label="Your recent orders"></ol>
+    </form>
+  </section>
+
+  <section class="live" id="livePanel" hidden>
+    <form id="liveForm">
+      <div class="field"><label for="ghOwner">GitHub account</label><input id="ghOwner" value="hermesagenttabbeqai" autocomplete="off" spellcheck="false"></div>
+      <div class="field"><label for="ghRepo">Repository</label><input id="ghRepo" placeholder="tip-calculator" autocomplete="off" spellcheck="false" required></div>
+      <div class="field"><label for="ghToken">Token (optional)</label><input id="ghToken" type="password" placeholder="Only kept in this tab" autocomplete="off"></div>
+      <button class="btn primary" type="submit" id="liveGo">Load and replay</button>
+    </form>
+    <p class="note">Reads the repo's history from GitHub (BRD, PLAN.md, approvals.md, issues, pull requests, CI checks, reviews, Pages) and replays it as agent conversation. Public repos work without a token. Without a token GitHub allows 60 calls per hour.</p>
+    <p class="status" id="liveStatus" role="status"></p>
+  </section>
+
+  <section class="rail-wrap" aria-label="Pipeline">
+    <ol class="rail" id="rail"></ol>
+  </section>
+
+  <div class="bar">
+    <div class="controls" id="player">
+      <button class="btn primary" type="button" id="btnPlay">Play</button>
+      <button class="btn" type="button" id="btnRestart">Restart</button>
+      <button class="btn" type="button" id="btnSkip">Skip to end</button>
+      <label class="check" for="speed">Speed
+        <select id="speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select>
+      </label>
+      <label class="check" for="auto"><input type="checkbox" id="auto"> Auto-approve gates</label>
+      <span class="clock" id="clock"></span>
+    </div>
+    <dl class="stats" id="stats"></dl>
+  </div>
+
+  <main class="grid">
+    <section class="panel map-panel" aria-label="Agent map">
+      <div class="panel-head"><h2>Who is talking</h2><span>Dots travel between agents as they message</span></div>
+      <div class="now" id="now"><p>Press Play to watch the agents work.</p></div>
+      <svg class="map" id="map" viewBox="0 0 600 446" role="img" aria-label="Map of the Hermes agents and the messages between them"></svg>
+    </section>
+    <section class="panel feed-panel" aria-label="Conversation">
+      <div class="panel-head"><h2>Conversation</h2><span id="feedCount">0 messages</span></div>
+      <ol class="feed" id="feed" aria-live="polite"></ol>
+    </section>
+  </main>
+
+  <section class="panel" aria-label="Parallel developers">
+    <div class="panel-head"><h2>Parallel developers</h2><span>Up to 3 sub-agents, each in its own worktree and branch</span></div>
+    <div class="lanes" id="lanes"></div>
+  </section>
+
+  <p class="foot" id="foot">The example run is sample data that shows how a pipeline run looks. Switch to Live repo to replay a real project from your bot account.</p>
+</div>
+
+<script>
+(() => {
+  const SVG = 'http://www.w3.org/2000/svg';
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const linkify = (s) => esc(s).replace(/https?:\/\/[^\s<]+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`);
+
+  // ---------- Agents and stages ----------
+  const AG = {
+    human: { name: 'You', ini: 'YOU', x: 300, y: 46, c: '--a-human', human: true },
+    orch:  { name: 'Orchestrator', ini: 'OR', x: 300, y: 186, c: '--a-orch' },
+    req:   { name: 'Requirements', ini: 'RQ', x: 96,  y: 112, c: '--a-req' },
+    plan:  { name: 'Planner',      ini: 'PL', x: 96,  y: 264, c: '--a-plan' },
+    rev:   { name: 'Reviewer',     ini: 'RV', x: 504, y: 112, c: '--a-rev' },
+    rel:   { name: 'Release',      ini: 'RL', x: 504, y: 264, c: '--a-rel' },
+    dev1:  { name: 'Dev-1', ini: 'D1', x: 186, y: 350, c: '--a-dev1' },
+    dev2:  { name: 'Dev-2', ini: 'D2', x: 300, y: 366, c: '--a-dev2' },
+    dev3:  { name: 'Dev-3', ini: 'D3', x: 414, y: 350, c: '--a-dev3' },
+    github: { name: 'GitHub', ini: 'GH', x: 540, y: 384, c: '--a-gh', service: true },
+  };
+  // Message tags that also touch GitHub: a second dot travels from the agent to the GitHub node.
+  const GH_TAGS = new Set(['commit', 'pr', 'ci', 'ci-fail', 'merge', 'deploy', 'issue', 'guard', 'push', 'branch', 'repo']);
+  const STAGES = [
+    { id: 'orch', name: 'Kickoff', c: '--a-orch' },
+    { id: 'req',  name: 'Requirements', c: '--a-req', gate: 'G1' },
+    { id: 'plan', name: 'Planning', c: '--a-plan', gate: 'G2' },
+    { id: 'dev',  name: 'Development', c: '--a-dev1' },
+    { id: 'rev',  name: 'Review', c: '--a-rev', gate: 'G3' },
+    { id: 'rel',  name: 'Release', c: '--a-rel' },
+  ];
+  const STAGE_AGENTS = { orch: [], req: ['req'], plan: ['plan'], dev: [], rev: ['rev'], rel: ['rel'] };
+  const STEPS = ['assigned', 'code', 'commit', 'pr', 'ci', 'review', 'merged'];
+  const STEP_NAMES = ['Task', 'Code', 'Commit', 'PR', 'CI', 'Review', 'Merged'];
+  const LANES = ['dev1', 'dev2', 'dev3'];
+
+  // ---------- Example run (sample data) ----------
+  function buildDemo() {
+    const ev = []; let T = 0;
+    const at = (s) => (T += s);
+    const M = (from, to, text, o = {}) => ev.push({ k: 'msg', from, to, text, ...o, at: at(o.dt ?? 35) });
+    const H = (from, to, text, o = {}) => ev.push({ k: 'handoff', from, to, text, tag: 'handoff', d: 1300, ...o, at: at(o.dt ?? 20) });
+    const S = (stage) => ev.push({ k: 'stage', stage, d: 300, at: T });
+    const G = (gate, q, items) => {
+      ev.push({ k: 'gate', gate, q, items, from: 'orch', to: 'human', d: 1100, at: at(15) });
+      ev.push({ k: 'approve', gate, from: 'human', to: 'orch', text: 'Approve', tag: 'gate', d: 1600, at: at(120) });
+    };
+
+    S('orch');
+    M('human', 'orch', '/sdlc-project tip-calculator: a web app that works out the tip and splits the bill', { tag: 'command', dt: 0, d: 600 });
+    M('orch', 'human', 'Starting tip-calculator. I created the repo from hermes-project-template.', { tag: 'commit', dt: 25 });
+    H('orch', 'req', 'Gather the requirements for tip-calculator');
+    S('req');
+    M('req', 'human', 'Which tip percentages should be preset?', { tag: 'question' });
+    M('human', 'req', '10, 15, 20, and a custom amount', { dt: 60 });
+    M('req', 'human', 'How many people can split one bill?', { tag: 'question' });
+    M('human', 'req', '1 to 20 people', { dt: 45 });
+    M('req', 'human', 'Should it remember the last values?', { tag: 'question' });
+    M('human', 'req', 'No, keep it simple', { dt: 40 });
+    M('req', 'orch', 'BRD drafted: BR-01 to BR-05, NFR-01 and NFR-02. Committed docs/BRD.md', { tag: 'commit', dt: 150 });
+    G('G1', 'Approve the BRD?', ['5 business requirements (BR-01 to BR-05)', '2 non-functional requirements (NFR-01, NFR-02)', 'File: docs/BRD.md']);
+    M('orch', 'req', 'G1 approved. Logged in approvals.md', { tag: 'commit', dt: 10 });
+    H('req', 'plan', 'BRD approved: 5 BRs and 2 NFRs are ready for planning');
+    S('plan');
+    M('plan', 'orch', 'Split the work into 3 tasks that do not share files', { dt: 120 });
+    M('plan', 'orch', 'Committed PLAN.md', { tag: 'commit' });
+    M('plan', 'orch', 'Created issues #1 Input form, #2 Tip logic, #3 Styles', { tag: 'issue' });
+    M('plan', 'orch', 'Turned on branch protection for main', { tag: 'guard' });
+    G('G2', 'Approve the plan?', ['3 tasks, 3 issues (#1 to #3)', 'Each task owns its own files', 'Up to 3 developers in parallel']);
+    M('orch', 'plan', 'G2 approved. Logged in approvals.md', { tag: 'commit', dt: 10 });
+    S('dev');
+    H('orch', 'dev1', 'Task #1: input form. Branch feature/tip-input-form', { lane: { id: 'dev1', step: 'assigned', task: 'Input form (#1)', branch: 'feature/tip-input-form' }, d: 900 });
+    H('orch', 'dev2', 'Task #2: tip logic. Branch feature/tip-calc-logic', { lane: { id: 'dev2', step: 'assigned', task: 'Tip logic (#2)', branch: 'feature/tip-calc-logic' }, d: 700, dt: 2 });
+    H('orch', 'dev3', 'Task #3: styles. Branch feature/split-bill-styles', { lane: { id: 'dev3', step: 'assigned', task: 'Styles (#3)', branch: 'feature/split-bill-styles' }, d: 700, dt: 2 });
+    M('dev1', 'orch', 'Worktree ready. Building the form', { lane: { id: 'dev1', step: 'code' }, dt: 20, d: 800 });
+    M('dev2', 'orch', 'Worktree ready. Writing calcTip()', { lane: { id: 'dev2', step: 'code' }, dt: 5, d: 600 });
+    M('dev3', 'orch', 'Worktree ready. Setting up the layout', { lane: { id: 'dev3', step: 'code' }, dt: 5, d: 600 });
+    M('dev2', 'orch', 'calcTip(bill, percent, people) is ready in src/tip.js', { tag: 'commit', lane: { id: 'dev2', step: 'commit' }, dt: 240 });
+    M('orch', 'dev1', 'Dev-2 finished calcTip in src/tip.js. Use it for the total', { tag: 'relay' });
+    M('dev3', 'orch', 'I use the classes .tip-btn and .total. Please keep these names', { tag: 'commit', lane: { id: 'dev3', step: 'commit' }, dt: 90 });
+    M('orch', 'dev1', 'Keep the class names .tip-btn and .total from Dev-3', { tag: 'relay' });
+    M('dev1', 'orch', 'Done. The form calls calcTip and uses the shared classes', { tag: 'commit', lane: { id: 'dev1', step: 'commit' }, dt: 200 });
+    M('dev2', 'orch', 'Opened PR #5 with 6 unit tests', { tag: 'pr', lane: { id: 'dev2', step: 'pr', pr: '#5' } });
+    M('dev1', 'orch', 'Opened PR #4', { tag: 'pr', lane: { id: 'dev1', step: 'pr', pr: '#4' }, dt: 20 });
+    M('dev3', 'orch', 'Opened PR #6', { tag: 'pr', lane: { id: 'dev3', step: 'pr', pr: '#6' }, dt: 20 });
+    M('dev2', 'orch', 'CI passed on PR #5 (test)', { tag: 'ci', lane: { id: 'dev2', step: 'ci', ci: 'passed' }, dt: 90 });
+    M('dev1', 'orch', 'CI passed on PR #4 (test)', { tag: 'ci', lane: { id: 'dev1', step: 'ci', ci: 'passed' }, dt: 20, d: 800 });
+    M('dev3', 'orch', 'CI passed on PR #6 (test)', { tag: 'ci', lane: { id: 'dev3', step: 'ci', ci: 'passed' }, dt: 20, d: 800 });
+    H('orch', 'rev', 'Please review PRs #4, #5 and #6');
+    S('rev');
+    M('rev', 'orch', 'PR #4 looks good. Approved', { tag: 'review', lane: { id: 'dev1', step: 'review', review: 'approved' }, dt: 120 });
+    M('rev', 'orch', 'PR #6 looks good. Approved', { tag: 'review', lane: { id: 'dev3', step: 'review', review: 'approved' }, dt: 60 });
+    M('rev', 'orch', 'PR #5: totals must round to 2 decimals (NFR-02). Changes requested', { tag: 'changes', lane: { id: 'dev2', step: 'review', review: 'changes' }, dt: 90 });
+    M('orch', 'dev2', 'Fix the rounding on PR #5', { tag: 'relay' });
+    M('dev2', 'orch', 'Pushed a fix and a test: 33.333 now shows 33.33', { tag: 'commit', lane: { id: 'dev2', ci: 'running' }, dt: 150 });
+    M('dev2', 'orch', 'CI passed on PR #5 (test)', { tag: 'ci', lane: { id: 'dev2', ci: 'passed' }, dt: 80 });
+    M('rev', 'orch', 'PR #5 approved. All 3 PRs are ready to merge', { tag: 'review', lane: { id: 'dev2', review: 'approved' }, dt: 60 });
+    G('G3', 'Merge 3 PRs into main?', ['PR #4 input form', 'PR #5 tip logic', 'PR #6 styles', 'All CI checks passed']);
+    M('rev', 'orch', 'Merged #4, #5 and #6 into main', { tag: 'merge', lanes: ['dev1', 'dev2', 'dev3'], dt: 30 });
+    H('rev', 'rel', 'main is ready. Start the release');
+    S('rel');
+    M('rel', 'orch', 'Opened PR #7: README and user guide', { tag: 'pr', dt: 120 });
+    M('rel', 'orch', 'Merged PR #7', { tag: 'merge', dt: 90 });
+    M('rel', 'orch', 'GitHub Pages deploy finished', { tag: 'deploy', dt: 70 });
+    M('rel', 'human', 'Live: https://hermesagenttabbeqai.github.io/tip-calculator/', { tag: 'live', dt: 10 });
+    ev.push({ k: 'end', d: 600, at: T });
+    ev.forEach(e => { e.clock = fmtElapsed(e.at); });
+    return ev;
+  }
+  function fmtElapsed(s) {
+    s = Math.round(s); const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, x = s % 60;
+    const p = (n) => String(n).padStart(2, '0');
+    return h ? `${h}:${p(m)}:${p(x)}` : `${p(m)}:${p(x)}`;
+  }
+
+  // ---------- Live mode: rebuild events from a GitHub repo ----------
+  async function buildLive(owner, repo, token) {
+    const headers = { Accept: 'application/vnd.github+json' };
+    if (token) headers.Authorization = 'Bearer ' + token;
+    let calls = 0;
+    const gh = async (p) => {
+      calls++;
+      let r;
+      try { r = await fetch('https://api.github.com' + p, { headers }); }
+      catch (e) { const err = new Error('blocked'); err.blocked = true; throw err; }
+      if (r.status === 404 || r.status === 409) return null;
+      if ((r.status === 403 || r.status === 429) && r.headers.get('x-ratelimit-remaining') === '0')
+        throw new Error('GitHub rate limit reached (60 calls per hour without a token). Add a token or try again later.');
+      if (r.status === 401) throw new Error('GitHub rejected the token. Check it, or leave the field empty for a public repo.');
+      if (!r.ok) throw new Error(`GitHub answered ${r.status} for ${p}.`);
+      return r.json();
+    };
+    const R = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
+    const encPath = (p) => p.split('/').map(encodeURIComponent).join('/');
+    const clip = (s, n = 110) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+
+    const info = await gh(R);
+    if (!info) throw new Error(`Couldn't find ${owner}/${repo}. Check the name. Private repos need a token.`);
+    const botLogin = info.owner?.login;
+    const raw = []; let seq = 0;
+    const add = (time, e, offsetMs = 0) => { if (!time) return; const t = new Date(new Date(time).getTime() + offsetMs); raw.push({ ...e, time: t, seq: seq++ }); };
+
+    add(info.created_at, { k: 'stage', stage: 'orch' });
+    add(info.created_at, { k: 'msg', from: 'orch', to: 'human', tag: 'commit', text: `Created ${info.full_name}${info.template_repository ? ' from ' + info.template_repository.name : ''}` });
+
+    const tree = await gh(`${R}/git/trees/${encodeURIComponent(info.default_branch)}?recursive=1`);
+    const paths = (tree?.tree || []).filter(t => t.type === 'blob').map(t => t.path);
+    const find = (re) => paths.find(p => re.test(p));
+    const brd = find(/(^|\/)(brd|business[-_ ]?requirements|requirements)[^/]*\.md$/i);
+    const plan = find(/(^|\/)plan[^/]*\.md$/i);
+    const appr = find(/(^|\/)approvals?[^/]*\.md$/i);
+    const history = async (path) => {
+      const c = await gh(`${R}/commits?path=${encodeURIComponent(path)}&per_page=100`);
+      return (c || []).map(x => ({ date: x.commit.committer?.date || x.commit.author?.date, msg: x.commit.message.split('\n')[0] })).reverse();
+    };
+
+    if (brd) {
+      const cs = await history(brd);
+      if (cs[0]) {
+        add(cs[0].date, { k: 'stage', stage: 'req' }, -2000);
+        add(cs[0].date, { k: 'handoff', from: 'orch', to: 'req', tag: 'handoff', text: 'Gather the requirements' }, -1000);
+        cs.forEach((c, i) => add(c.date, { k: 'msg', from: 'req', to: 'orch', tag: 'commit', text: `${i ? 'Updated' : 'Committed'} ${brd}: ${clip(c.msg, 80)}` }));
+      }
+    }
+    if (plan) {
+      const cs = await history(plan);
+      if (cs[0]) {
+        add(cs[0].date, { k: 'stage', stage: 'plan' }, -2000);
+        add(cs[0].date, { k: 'handoff', from: 'req', to: 'plan', tag: 'handoff', text: 'BRD approved. Plan the work' }, -1000);
+        cs.forEach((c, i) => add(c.date, { k: 'msg', from: 'plan', to: 'orch', tag: 'commit', text: `${i ? 'Updated' : 'Committed'} ${plan}: ${clip(c.msg, 80)}` }));
+      }
+    }
+    if (appr) {
+      const [file, cs] = await Promise.all([gh(`${R}/contents/${encPath(appr)}`), history(appr)]);
+      if (file?.content) {
+        const bin = atob(file.content.replace(/\n/g, ''));
+        const text = new TextDecoder().decode(Uint8Array.from(bin, ch => ch.charCodeAt(0)));
+        const seen = new Set(); let idx = 0;
+        text.split('\n').forEach(line => {
+          const m = line.match(/\bG\s?-?([123])\b/i);
+          if (!m) return;
+          const gate = 'G' + m[1];
+          if (seen.has(gate)) return; seen.add(gate);
+          const clean = clip(line.replace(/^[\s>*#|-]+/, '').replace(/\|/g, ' · ').replace(/\*\*/g, ''), 140);
+          const d = line.match(/\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?Z?)?/);
+          const byMsg = cs.find(c => new RegExp('\\bG\\s?-?' + m[1] + '\\b', 'i').test(c.msg));
+          const date = byMsg?.date || (d && !isNaN(new Date(d[0])) ? d[0] : null) || cs[Math.min(idx + 1, cs.length - 1)]?.date;
+          idx++;
+          add(date, { k: 'gateDone', gate, from: 'human', to: 'orch', tag: 'gate', text: clean });
+        });
+      }
+    }
+
+    const issues = await gh(`${R}/issues?state=all&per_page=100&sort=created&direction=asc`) || [];
+    issues.filter(i => !i.pull_request).forEach(i => add(i.created_at, { k: 'msg', from: 'plan', to: 'orch', tag: 'issue', text: `Created issue #${i.number}: ${clip(i.title, 80)}` }));
+
+    const pulls = (await gh(`${R}/pulls?state=all&per_page=100&sort=created&direction=asc`) || []).slice(0, 12);
+    const laneOf = new Map(); let laneN = 0; let revStarted = false; let relStarted = false;
+    const firstRev = (t) => { if (revStarted) return; revStarted = true; add(t, { k: 'stage', stage: 'rev' }, -2000); add(t, { k: 'handoff', from: 'orch', to: 'rev', tag: 'handoff', text: 'Pull requests are ready for review' }, -1000); };
+    const firstRel = (t) => { if (relStarted) return; relStarted = true; add(t, { k: 'stage', stage: 'rel' }, -2000); add(t, { k: 'handoff', from: 'rev', to: 'rel', tag: 'handoff', text: 'main is ready. Start the release' }, -1000); };
+
+    const details = await Promise.all(pulls.map(pr => Promise.all([
+      gh(`${R}/pulls/${pr.number}/reviews?per_page=50`),
+      gh(`${R}/issues/${pr.number}/comments?per_page=50`),
+      gh(`${R}/commits/${pr.head.sha}/check-runs?per_page=20`),
+    ])));
+
+    pulls.forEach((pr, i) => {
+      const ref = pr.head.ref;
+      const isRel = /readme|docs?\b|guide|release/i.test(ref + ' ' + pr.title);
+      let agent = 'rel';
+      if (!isRel) {
+        if (!laneOf.has(ref)) {
+          laneOf.set(ref, LANES[laneN++ % 3]);
+          const a = laneOf.get(ref);
+          add(pr.created_at, { k: 'stage', stage: 'dev' }, -3000);
+          add(pr.created_at, { k: 'handoff', from: 'orch', to: a, tag: 'handoff', text: `Task: ${clip(pr.title, 70)}. Branch ${ref}`, lane: { id: a, step: 'assigned', task: clip(pr.title, 60), branch: ref, reset: true } }, -2000);
+        }
+        agent = laneOf.get(ref);
+      } else firstRel(pr.created_at);
+      const lane = (o) => isRel ? undefined : { id: agent, ...o };
+      add(pr.created_at, { k: 'msg', from: agent, to: 'orch', tag: 'pr', text: `Opened PR #${pr.number}: ${clip(pr.title, 80)}`, lane: lane({ step: 'pr', pr: '#' + pr.number }) });
+
+      const [reviews, comments, checks] = details[i];
+      (checks?.check_runs || []).filter(c => c.completed_at).forEach(c => {
+        const okRun = c.conclusion === 'success';
+        add(c.completed_at, { k: 'msg', from: agent, to: 'orch', tag: okRun ? 'ci' : 'ci-fail', text: `CI ${okRun ? 'passed' : (c.conclusion || 'finished')} on PR #${pr.number} (${c.name})`, lane: lane({ step: 'ci', ci: okRun ? 'passed' : 'failed' }) });
+      });
+      (reviews || []).filter(r => r.submitted_at).forEach(r => {
+        const human = r.user?.login && r.user.login !== botLogin;
+        if (!human) firstRev(r.submitted_at);
+        const label = r.state === 'APPROVED' ? 'Approved' : r.state === 'CHANGES_REQUESTED' ? 'Changes requested on' : 'Reviewed';
+        add(r.submitted_at, { k: 'msg', from: human ? 'human' : 'rev', to: agent, tag: r.state === 'CHANGES_REQUESTED' ? 'changes' : 'review', text: `${label} PR #${pr.number}${r.body ? ': ' + clip(r.body) : ''}`, lane: lane({ step: 'review', review: r.state === 'CHANGES_REQUESTED' ? 'changes' : r.state === 'APPROVED' ? 'approved' : 'reviewed' }) });
+      });
+      (comments || []).forEach(c => {
+        const human = c.user?.login && c.user.login !== botLogin;
+        if (!human) firstRev(c.created_at);
+        add(c.created_at, { k: 'msg', from: human ? 'human' : 'rev', to: agent, tag: 'review', text: `Comment on PR #${pr.number}: ${clip(c.body)}`, lane: lane({ step: 'review', review: 'reviewed' }) });
+      });
+      if (pr.merged_at) {
+        if (!isRel) firstRev(pr.merged_at);
+        add(pr.merged_at, { k: 'msg', from: isRel ? 'rel' : 'rev', to: 'orch', tag: 'merge', text: `Merged PR #${pr.number} into ${pr.base.ref}`, lane: lane({ step: 'merged' }) });
+      }
+    });
+
+    const deps = (await gh(`${R}/deployments?environment=github-pages&per_page=30`) || []).slice(0, 3).reverse();
+    deps.forEach(d => { firstRel(d.created_at); add(d.created_at, { k: 'msg', from: 'rel', to: 'orch', tag: 'deploy', text: 'GitHub Pages deploy started' }); });
+    const pages = await gh(`${R}/pages`);
+    raw.sort((a, b) => a.time - b.time || a.seq - b.seq);
+    const last = raw.length ? raw[raw.length - 1].time : new Date();
+    if (pages?.html_url) raw.push({ k: 'msg', from: 'rel', to: 'human', tag: 'live', text: `Live: ${pages.html_url}`, time: new Date(last.getTime() + 1000) });
+
+    const fmt = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const events = raw.map(e => ({ ...e, clock: fmt.format(e.time), d: e.k === 'stage' ? 250 : 950 }));
+    events.push({ k: 'end', d: 500, clock: fmt.format(last) });
+    return { events, calls, name: info.full_name, url: info.html_url, msgCount: events.filter(e => e.from).length };
+  }
+
+  // ---------- View state ----------
+  const P = { events: [], i: 0, playing: false, speed: 1, timer: null, waiting: null, auto: false, mode: 'demo', label: '' };
+  let V;
+  function freshView() {
+    V = {
+      stage: -1, gates: {}, nodes: {}, lanes: {}, stats: { messages: 0, handoffs: 0, commits: 0, prs: 0, ci: 0, gates: 0 },
+      talk: new Map(), lastStageLogged: null,
+    };
+    Object.keys(AG).forEach(k => V.nodes[k] = 'idle');
+    LANES.forEach(id => V.lanes[id] = { step: -1, task: '', branch: '', pr: '', ci: '', review: '', done: '' });
+  }
+
+  // ---------- Rendering: rail ----------
+  function renderRail() {
+    const out = [];
+    STAGES.forEach((s, i) => {
+      if (i) out.push(`<li class="conn ${V.stage > i - 1 && V.stage >= i ? 'done' : ''}" aria-hidden="true" style="flex:1"></li>`);
+      const cls = V.stage === i && !V.finished ? 'active' : (V.stage > i || V.finished) ? 'done' : '';
+      out.push(`<li><span class="stage ${cls}" style="--c:var(${s.c})"><span class="dot">${cls === 'done' ? '✓' : i + 1}</span><span class="nm">${s.name}</span></span></li>`);
+      if (s.gate) {
+        const g = V.gates[s.gate] || '';
+        out.push(`<li class="conn ${g === 'approved' ? 'done' : ''}" aria-hidden="true" style="flex:0 1 18px"></li>`);
+        out.push(`<li><span class="gatepin ${g}" title="${s.gate}: ${g === 'approved' ? 'approved' : g === 'waiting' ? 'waiting for you' : 'not reached'}">${s.gate}${g === 'approved' ? ' ✓' : ''}</span></li>`);
+      }
+    });
+    $('rail').innerHTML = out.join('');
+  }
+
+  // ---------- Rendering: map ----------
+  let layerHub, layerTalk, layerPackets, layerNodes;
+  function buildMap() {
+    const svg = $('map'); svg.innerHTML = '';
+    const g = (cls) => { const e = document.createElementNS(SVG, 'g'); if (cls) e.setAttribute('class', cls); svg.appendChild(e); return e; };
+    layerHub = g(); layerTalk = g(); layerPackets = g(); layerNodes = g();
+    Object.entries(AG).forEach(([id, a]) => {
+      if (id === 'orch') return;
+      const l = document.createElementNS(SVG, 'line');
+      l.setAttribute('x1', AG.orch.x); l.setAttribute('y1', AG.orch.y); l.setAttribute('x2', a.x); l.setAttribute('y2', a.y);
+      l.setAttribute('class', 'hub'); layerHub.appendChild(l);
+    });
+    Object.entries(AG).forEach(([id, a]) => {
+      const n = document.createElementNS(SVG, 'g');
+      n.setAttribute('class', 'node'); n.id = 'n-' + id;
+      const col = `var(${a.c})`;
+      const shape = a.service
+        ? `<rect class="halo" x="${a.x - 34}" y="${a.y - 30}" width="68" height="60" rx="14" style="fill:${col}"/>
+           <g class="core-g"><rect class="core" x="${a.x - 24}" y="${a.y - 20}" width="48" height="40" rx="7" style="stroke:${col};stroke-dasharray:4 3"/>
+           <text class="ini" x="${a.x}" y="${a.y + 4.5}" text-anchor="middle" style="fill:${col}">${a.ini}</text></g>`
+        : a.human
+        ? `<rect class="halo" x="${a.x - 36}" y="${a.y - 32}" width="72" height="64" rx="18" style="fill:${col}"/>
+           <g class="core-g"><rect class="core" x="${a.x - 26}" y="${a.y - 22}" width="52" height="44" rx="11" style="stroke:${col}"/>
+           <text class="ini" x="${a.x}" y="${a.y + 4.5}" text-anchor="middle" style="fill:${col}">${a.ini}</text></g>`
+        : `<circle class="halo" cx="${a.x}" cy="${a.y}" r="36" style="fill:${col}"/>
+           <g class="core-g"><circle class="core" cx="${a.x}" cy="${a.y}" r="24" style="stroke:${col}"/>
+           <text class="ini" x="${a.x}" y="${a.y + 4.5}" text-anchor="middle" style="fill:${col}">${a.ini}</text></g>
+           <g class="badge"><circle cx="${a.x + 18}" cy="${a.y - 18}" r="8" style="fill:var(--ok)"/><path d="M${a.x + 14} ${a.y - 18} l3 3 l5 -6" style="stroke:var(--surface);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"/></g>`;
+      const lx = a.human ? a.x + 40 : a.x, ly = a.human ? a.y - 2 : a.y + 42, anchor = a.human ? 'start' : 'middle';
+      n.innerHTML = shape +
+        `<text class="lbl" x="${lx}" y="${ly}" text-anchor="${anchor}">${a.human ? 'You (human)' : a.name}</text>
+         <text class="st" x="${lx}" y="${ly + 14}" text-anchor="${anchor}">idle</text>`;
+      layerNodes.appendChild(n);
+    });
+  }
+  function talkLine(a, b) {
+    const key = [a, b].sort().join('|');
+    let t = V.talk.get(key);
+    if (!t) {
+      const l = document.createElementNS(SVG, 'line');
+      l.setAttribute('x1', AG[a].x); l.setAttribute('y1', AG[a].y); l.setAttribute('x2', AG[b].x); l.setAttribute('y2', AG[b].y);
+      l.setAttribute('class', 'talk'); layerTalk.appendChild(l);
+      t = { el: l, n: 0, hotTimer: null }; V.talk.set(key, t);
+    }
+    t.n++;
+    t.el.style.strokeOpacity = Math.min(0.9, 0.3 + t.n * 0.07);
+    return t;
+  }
+  function packet(a, b, animate) {
+    if (!AG[a] || !AG[b] || a === b) return;
+    const t = talkLine(a, b);
+    const col = `var(${AG[a].c})`;
+    t.el.classList.add('hot'); t.el.style.stroke = col;
+    clearTimeout(t.hotTimer);
+    t.hotTimer = setTimeout(() => { t.el.classList.remove('hot'); t.el.style.stroke = ''; }, animate ? 1400 / P.speed : 0);
+    if (!animate || reduced) return;
+    const A = AG[a], B = AG[b];
+    const c = document.createElementNS(SVG, 'circle');
+    c.setAttribute('r', 6); c.setAttribute('class', 'packet'); c.style.fill = col; c.style.color = col;
+    layerPackets.appendChild(c);
+    const dur = Math.max(260, 720 / P.speed), t0 = performance.now();
+    const f = (now) => {
+      let k = Math.min(1, (now - t0) / dur);
+      const e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      c.setAttribute('cx', A.x + (B.x - A.x) * e); c.setAttribute('cy', A.y + (B.y - A.y) * e);
+      if (k < 1) requestAnimationFrame(f);
+      else { c.remove(); const n = $('n-' + b); if (n) { n.classList.remove('pop'); void n.getBBox(); n.classList.add('pop'); } }
+    };
+    requestAnimationFrame(f);
+  }
+  const STATUS_TEXT = { idle: 'idle', active: 'working', done: 'done', waiting: 'your turn' };
+  function renderNodes() {
+    Object.keys(AG).forEach(id => {
+      const n = $('n-' + id); if (!n) return;
+      const s = V.nodes[id];
+      n.setAttribute('class', 'node ' + s);
+      const core = n.querySelector('.core'), ini = n.querySelector('.ini'), st = n.querySelector('.st');
+      const col = `var(${AG[id].c})`;
+      core.style.fill = s === 'active' ? col : '';
+      ini.style.fill = s === 'active' ? 'var(--surface)' : col;
+      st.textContent = id === 'human' && s === 'active' ? 'replied' : AG[id].service ? (s === 'active' ? 'updated' : 'repo') : STATUS_TEXT[s];
+      st.setAttribute('class', 'st ' + s);
+    });
+  }
+  function activate(ids) {
+    Object.keys(V.nodes).forEach(k => { if (V.nodes[k] === 'active') V.nodes[k] = isDone(k) ? 'done' : 'idle'; });
+    ids.forEach(k => { if (k && V.nodes[k] !== undefined && V.nodes[k] !== 'waiting') V.nodes[k] = 'active'; });
+  }
+  function isDone(id) {
+    if (AG[id]?.service) return false;
+    if (V.finished) return id !== 'human';
+    const si = STAGES.findIndex(s => (STAGE_AGENTS[s.id] || []).includes(id));
+    if (si >= 0 && V.stage > si) return true;
+    if (LANES.includes(id)) return V.lanes[id].step === STEPS.length - 1;
+    return false;
+  }
+
+  // ---------- Rendering: feed ----------
+  function chip(id) { const a = AG[id]; return a ? `<span class="chip" style="--c:var(${a.c})">${a.human ? 'You' : a.name}</span>` : ''; }
+  function addFeedRow(html) {
+    const feed = $('feed');
+    const empty = feed.querySelector('.empty'); if (empty) empty.remove();
+    const nearBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 80;
+    feed.insertAdjacentHTML('beforeend', html);
+    if (nearBottom || P.playing) feed.scrollTop = feed.scrollHeight;
+  }
+  const TAG_LABEL = { handoff: 'handoff', commit: 'commit', pr: 'pull request', ci: 'ci', 'ci-fail': 'ci failed', review: 'review', changes: 'changes', merge: 'merge', deploy: 'deploy', live: 'live', issue: 'issue', guard: 'protection', question: 'question', command: 'command', relay: 'relay', gate: 'gate', telegram: 'telegram', web: 'website', reply: 'reply', tool: 'tool', error: 'error', push: 'push', branch: 'branch', repo: 'repo', file: 'file', docs: 'docs', done: 'finished', answer: 'answer', approval: 'approval' };
+  function msgRow(e) {
+    const c = AG[e.from]?.c || '--line-strong';
+    return `<li class="msg ${e.k === 'handoff' ? 'handoff' : ''} ${e.k === 'action' ? 'action' : ''}" style="--c:var(${c})">
+      <div class="who">${chip(e.from)}<span class="arrow" aria-label="to">→</span>${chip(e.to)}</div>
+      <p>${linkify(e.text)}</p>
+      <div class="meta"><span class="tag t-${e.tag || ''}">${TAG_LABEL[e.tag] || 'message'}</span><time>${esc(e.clock || '')}</time></div></li>`;
+  }
+  function gateCard(e, approved) {
+    return `<li class="gatecard ${approved ? 'approved' : ''}" id="gc-${e.gate}">
+      <div class="gh"><span class="gid">${e.gate}</span><span>${esc(e.q || 'Approval gate')}</span></div>
+      ${e.items ? `<ul>${e.items.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+      ${e.line ? `<p style="margin:0;font-size:13px">${esc(e.line)}</p>` : ''}
+      <div class="gf"><span class="gs">${approved ? 'Approved by you' : e.remote ? (CLOUD.send ? 'Waiting for your approval' : 'Waiting for your reply in Telegram') : 'Waiting for you'}</span>${e.remote
+        ? (CLOUD.send ? `<span class="gbtns"><button class="btn gate" type="button" data-say="Approve">Approve ${e.gate}</button><button class="btn" type="button" data-fill="Please change this: ">Ask for changes</button></span>` : '')
+        : `<button class="btn gate" type="button" data-approve="${e.gate}">Approve ${e.gate}</button>`}</div></li>`;
+  }
+  function stageBreak(i) { addFeedRow(`<li class="stagebreak">${STAGES[i].name}</li>`); }
+
+  // ---------- Rendering: now banner, stats, lanes ----------
+  function setNow(html, waiting) { const n = $('now'); n.innerHTML = html; n.classList.toggle('waiting', !!waiting); }
+  function renderStats() {
+    const s = V.stats;
+    const items = [['Messages', s.messages], ['Handoffs', s.handoffs], ['Commits', s.commits], ['Pull requests', s.prs], ['CI runs', s.ci], ['Gates', `${s.gates}/3`]];
+    $('stats').innerHTML = items.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+    $('feedCount').textContent = `${s.messages} message${s.messages === 1 ? '' : 's'}`;
+  }
+  function renderLanes() {
+    const head = `<div class="lane-head" aria-hidden="true"><span>Agent</span><span>Task and branch</span><span class="steps-l">${STEP_NAMES.map(s => `<span>${s}</span>`).join('')}</span><span style="text-align:right">PR · CI · Review</span></div>`;
+    const rows = LANES.map(id => {
+      const L = V.lanes[id], c = AG[id].c;
+      const segs = STEPS.map((_, i) => {
+        let cls = '';
+        if (L.step === STEPS.length - 1) cls = 'fin';
+        else if (i < L.step) cls = 'on';
+        else if (i === L.step) cls = P.playing || (P.mode === 'stream' && !L.done) ? 'cur' : 'on';
+        return `<i class="${cls}"></i>`;
+      }).join('');
+      const ciCls = L.ci === 'passed' ? 'ok' : L.ci === 'running' ? 'run' : L.ci === 'failed' ? 'bad' : '';
+      const rvCls = L.review === 'approved' ? 'ok' : L.review === 'changes' ? 'bad' : L.review ? 'run' : '';
+      return `<div class="lane" style="--c:var(${c})">
+        <span>${chip(id)}</span>
+        <div class="task"><b>${esc(L.task || 'Waiting for a task')}</b><code>${esc(L.branch || '—')}</code></div>
+        <div><div class="steps" role="img" aria-label="${L.step < 0 ? 'Not started' : 'Step: ' + STEP_NAMES[L.step]}">${segs}</div><span class="now-step">${L.step < 0 ? 'Not started' : STEP_NAMES[L.step]}</span></div>
+        <div class="pills">${L.done ? `<span class="pill ${L.done === 'completed' ? 'done' : 'bad'}">${esc(L.done)}</span>` : ''}<span class="pill">${esc(L.pr || 'PR —')}</span><span class="pill ${ciCls}">CI ${esc(L.ci || '—')}</span><span class="pill ${rvCls}">${esc(L.review || 'review —')}</span></div>
+      </div>`;
+    }).join('');
+    $('lanes').innerHTML = head + rows;
+  }
+  function updateLane(o) {
+    const L = V.lanes[o.id]; if (!L) return;
+    if (o.reset) Object.assign(L, { step: -1, pr: '', ci: '', review: '', done: '' });
+    if (o.step) { const si = STEPS.indexOf(o.step); if (si > L.step) L.step = si; }
+    if (o.ci === 'running' && L.step > STEPS.indexOf('ci')) L.step = STEPS.indexOf('ci');
+    ['task', 'branch', 'pr', 'ci', 'review', 'done'].forEach(k => { if (o[k] !== undefined && o[k] !== null) L[k] = o[k]; });
+    if (o.step === 'merged') { L.ci = L.ci || 'passed'; }
+  }
+
+  // ---------- Applying events ----------
+  function setStage(id) {
+    const i = STAGES.findIndex(s => s.id === id);
+    if (i <= V.stage) return;
+    V.stage = i;
+    stageBreak(i);
+    Object.keys(V.nodes).forEach(k => { if (V.nodes[k] !== 'active' && V.nodes[k] !== 'waiting') V.nodes[k] = isDone(k) ? 'done' : 'idle'; });
+  }
+  function bump(e) {
+    const s = V.stats;
+    if (e.from) s.messages++;
+    if (e.k === 'handoff') s.handoffs++;
+    if (e.tag === 'commit') s.commits++;
+    if (e.tag === 'pr') s.prs++;
+    if (e.tag === 'ci' || e.tag === 'ci-fail') s.ci++;
+    if (e.k === 'approve' || e.k === 'gateDone') s.gates = Math.min(3, s.gates + 1);
+  }
+  function apply(e, animate) {
+    if (e.clock) $('clock').innerHTML = `<b>${esc(e.clock)}</b> ${P.mode === 'demo' ? 'elapsed' : ''}`;
+    switch (e.k) {
+      case 'stage': setStage(e.stage); break;
+      case 'gate':
+        V.gates[e.gate] = 'waiting'; V.nodes.human = 'waiting';
+        addFeedRow(gateCard(e, false));
+        packet(e.from, e.to, animate);
+        setNow(`${chip('orch')}<span class="arrow">→</span>${chip('human')}<p>${e.gate}: ${esc(e.q)}</p><button class="btn gate" type="button" data-approve="${e.gate}">Approve ${e.gate}</button>`, true);
+        break;
+      case 'approve':
+      case 'gateDone':
+        V.gates[e.gate] = 'approved'; V.nodes.human = 'idle';
+        {
+          const gc = $('gc-' + e.gate);
+          if (gc) { gc.classList.add('approved'); gc.querySelector('.gs').textContent = 'Approved by you'; }
+          else if (e.k === 'gateDone') addFeedRow(gateCard({ gate: e.gate, q: { G1: 'Requirements approved', G2: 'Plan approved', G3: 'Merge approved' }[e.gate], line: e.text }, true));
+        }
+        addFeedRow(msgRow({ ...e, text: e.k === 'approve' ? `Approve ${e.gate}` : `Approved ${e.gate}` }));
+        bump(e); activate([e.from, e.to]); packet(e.from, e.to, animate);
+        setNow(`${chip(e.from)}<span class="arrow">→</span>${chip(e.to)}<p>${e.gate} approved</p>`);
+        break;
+      case 'msg':
+      case 'handoff':
+        addFeedRow(msgRow(e)); bump(e); activate([e.from, e.to]); packet(e.from, e.to, animate);
+        if (GH_TAGS.has(e.tag) && e.to !== 'github') { packet(e.from, 'github', animate); V.nodes.github = 'active'; }
+        setNow(`${chip(e.from)}<span class="arrow">→</span>${chip(e.to)}<p>${linkify(e.text)}</p>`);
+        break;
+      case 'action': // an agent doing something on its own (tool call); optional feed row
+        if (!e.quiet) { addFeedRow(msgRow(e)); bump(e); }
+        activate([e.from, e.to === 'github' ? 'github' : null]);
+        if (e.to) packet(e.from, e.to, animate);
+        setNow(`${chip(e.from)}<p class="mono" style="font-size:12.5px">${esc(e.text)}</p>`);
+        break;
+      case 'gateAsk':
+        if (V.gates[e.gate] === 'approved' || V.gates[e.gate] === 'waiting') break;
+        V.gates[e.gate] = 'waiting'; V.nodes.human = 'waiting';
+        addFeedRow(gateCard({ ...e, remote: true }, false));
+        break;
+      case 'end': finish(); return;
+    }
+    if (e.lane) updateLane(e.lane);
+    if (e.lanes) e.lanes.forEach(id => updateLane({ id, step: 'merged' }));
+    if (animate) render();
+  }
+  function render() { renderRail(); renderNodes(); renderStats(); renderLanes(); }
+  function finish() {
+    V.finished = true;
+    Object.keys(V.nodes).forEach(k => V.nodes[k] = k === 'human' || AG[k].service ? 'idle' : 'done');
+    setPlaying(false);
+    setNow(`<p><b>Pipeline finished.</b> ${V.stats.messages} messages, ${V.stats.handoffs} handoffs, ${V.stats.gates} of 3 gates approved.</p>`);
+    $('btnPlay').textContent = 'Replay';
+    render();
+  }
+
+  // ---------- Player ----------
+  function setPlaying(on) {
+    P.playing = on;
+    $('btnPlay').textContent = on ? 'Pause' : (P.i === 0 ? 'Play' : V?.finished ? 'Replay' : 'Resume');
+    clearTimeout(P.timer);
+    if (on) schedule();
+    if (V) renderLanes();
+  }
+  function schedule() {
+    clearTimeout(P.timer);
+    if (!P.playing) return;
+    const next = P.events[P.i];
+    if (!next) return;
+    P.timer = setTimeout(step, (next.d ?? 1100) / P.speed);
+  }
+  function step() {
+    if (P.i >= P.events.length) { finish(); return; }
+    const e = P.events[P.i++];
+    apply(e, true);
+    if (e.k === 'gate' && !P.auto) { P.waiting = e; setPlaying(false); $('btnPlay').textContent = 'Approve ' + e.gate; return; }
+    if (e.k !== 'end') schedule();
+  }
+  function approve() {
+    if (!P.waiting) return;
+    P.waiting = null;
+    P.playing = true; $('btnPlay').textContent = 'Pause';
+    step();
+  }
+  function restart(autoplay) {
+    clearTimeout(P.timer); P.i = 0; P.waiting = null;
+    freshView(); buildMap();
+    $('feed').innerHTML = '<li class="empty">Messages between agents show up here.</li>';
+    setNow('<p>Press Play to watch the agents work.</p>');
+    $('clock').textContent = '';
+    render();
+    setPlaying(!!autoplay);
+  }
+  function skipToEnd() {
+    clearTimeout(P.timer);
+    if (P.i === 0 && !V.finished) { /* fresh */ }
+    if (V.finished) restart(false);
+    P.waiting = null; P.playing = false;
+    while (P.i < P.events.length) {
+      const e = P.events[P.i++];
+      if (e.k === 'end') { finish(); break; }
+      apply(e, false);
+    }
+    if (!V.finished) finish();
+    $('feed').scrollTop = $('feed').scrollHeight;
+  }
+  function load(events, label) {
+    P.events = events; restart(false);
+    skipToEnd();
+  }
+
+  // ---------- Wiring ----------
+  document.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-approve]');
+    if (b && P.waiting && P.waiting.gate === b.dataset.approve) approve();
+  });
+  $('btnPlay').addEventListener('click', () => {
+    if (P.waiting) return approve();
+    if (V.finished || P.i >= P.events.length) return restart(true);
+    setPlaying(!P.playing);
+  });
+  $('btnRestart').addEventListener('click', () => restart(true));
+  $('btnSkip').addEventListener('click', skipToEnd);
+  $('speed').addEventListener('change', (e) => { P.speed = +e.target.value; schedule(); });
+  $('auto').addEventListener('change', (e) => { P.auto = e.target.checked; if (P.auto && P.waiting) approve(); });
+
+  // ---------- Live stream from the agent-room server ----------
+  // The plugin reports sessions, tool calls and sub-agents. The main Hermes session plays every stage
+  // role in turn (the skill it has loaded decides), so its events are drawn as the current stage's agent.
+  // Sub-agents from delegate_task get their own lane (Dev-1..3) or the Reviewer.
+  const KEY = (() => { try { return new URLSearchParams(location.search).get('key') || ''; } catch (e) { return ''; } })();
+  // Cloud mode (website on GitHub Pages): events come from Supabase. The project URL and publishable
+  // key are public by design; the read key comes from the link (#read=...) and is never stored.
+  const CLOUD = (() => {
+    let h; try { h = new URLSearchParams((location.hash || '').slice(1)); } catch (e) { h = new URLSearchParams(); }
+    return {
+      url: (h.get('url') || 'https://dzqvokssnvsfhixswhtf.supabase.co').replace(/\/+$/, ''),
+      key: h.get('apikey') || 'sb_publishable_oUWDRiQALHztfBxU0ZBrUQ_DFmDoomJ',
+      read: h.get('read') || '',
+      send: h.get('send') || '',
+    };
+  })();
+  const SKILL_STAGE = { 'sdlc-project': 'orch', 'sdlc-requirements': 'req', 'sdlc-planning': 'plan', 'sdlc-development': 'dev', 'sdlc-review': 'rev', 'sdlc-release': 'rel' };
+  const STAGE_VOICE = ['orch', 'req', 'plan', 'orch', 'rev', 'rel'];
+  const GATE_Q = { G1: 'Approve the BRD?', G2: 'Approve the plan?', G3: 'Approve the merge?' };
+  const LS = { es: null, replay: false, child: new Map(), laneOwner: {}, laneUsed: {}, laneSeq: 0, prLane: new Map(), showTools: false, events: 0, last: null };
+  const tfmt = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const stageIdx = (id) => STAGES.findIndex(s => s.id === id);
+  const voice = () => STAGE_VOICE[Math.max(0, V.stage)];
+  const isChild = (sid) => !!sid && LS.child.has(sid);
+  const who = (sid) => isChild(sid) ? LS.child.get(sid) : voice();
+  const laneFor = (a) => LANES.includes(a) ? a : null;
+  const prKey = (n) => n ? '#' + String(n).replace('#', '') : '';
+  const branchIn = (s) => (String(s || '').match(/\b(?:feature|feat|fix|chore|docs|task)\/[\w.\-\/]+/) || [''])[0].replace(/[.,;:)]+$/, '');
+
+  function emit(e) { e.clock = LS.last; apply(e, !LS.replay); }
+  function goStage(id, why) {
+    if (stageIdx(id) <= V.stage) return;
+    const from = voice();
+    emit({ k: 'stage', stage: id });
+    const to = voice();
+    if (why && from !== to) emit({ k: 'handoff', from, to, tag: 'handoff', text: why });
+  }
+  function skillStage(name) {
+    if (name === 'sdlc-project') { if (V.stage < 0) goStage('orch'); return; }
+    const st = SKILL_STAGE[name];
+    if (st) goStage(st, `Loaded ${name}`);
+  }
+  function newRun() {
+    LS.child.clear(); LS.prLane.clear(); LS.laneOwner = {}; LS.laneUsed = {};
+    freshView(); buildMap();
+    $('feed').innerHTML = '<li class="empty">Waiting for the agents. Send the bot a message in Telegram, or run /sdlc-project.</li>';
+    setNow('<p>Waiting for the agents…</p>');
+    render();
+  }
+  function assignLane(child) {
+    let lane = LANES.find(l => !LS.laneOwner[l]);
+    if (!lane) lane = LANES.slice().sort((a, b) => (LS.laneUsed[a] || 0) - (LS.laneUsed[b] || 0))[0];
+    LS.laneOwner[lane] = child; LS.laneUsed[lane] = ++LS.laneSeq;
+    return lane;
+  }
+  function laneOfAction(a, x) {
+    if (laneFor(a)) return a;
+    if (x.pr && LS.prLane.has(prKey(x.pr))) return LS.prLane.get(prKey(x.pr));
+    if (x.branch) return LANES.find(id => V.lanes[id].branch === x.branch) || null;
+    return null;
+  }
+
+  function onAction(a, x, r) {
+    const lane = laneOfAction(a, x);
+    const L = (o) => lane ? { id: lane, ...o } : undefined;
+    const pr = prKey(x.pr);
+    const quiet = !LS.showTools;
+    switch (x.action) {
+      case 'commit': emit({ k: 'msg', from: a, to: 'github', tag: 'commit', text: `Committed${x.message ? ': ' + x.message : ''}`, lane: L({ step: 'commit' }) }); break;
+      case 'push': emit({ k: 'msg', from: a, to: 'github', tag: 'push', text: `Pushed${x.branch ? ' to ' + x.branch : ''}`, lane: L({ step: 'commit' }) }); break;
+      case 'worktree': case 'branch': if (x.branch) emit({ k: 'action', from: a, tag: 'branch', text: `New branch ${x.branch}`, lane: L({ branch: x.branch }), quiet }); break;
+      case 'pr_open': {
+        if (/readme|docs?\b|guide|release/i.test(`${x.title || ''} ${x.branch || ''}`) && V.stage >= stageIdx('rev')) goStage('rel', 'main is ready. Start the release');
+        if (pr && lane) LS.prLane.set(pr, lane);
+        emit({ k: 'msg', from: who(r.sid), to: 'github', tag: 'pr', text: `${pr ? 'Opened PR ' + pr : 'Opened a pull request'}${x.title ? ': ' + x.title : ''}`, lane: L({ step: 'pr', pr: pr || undefined, branch: x.branch || undefined }) });
+        break;
+      }
+      case 'ci': emit({ k: 'msg', from: a, to: 'github', tag: x.outcome === 'failed' ? 'ci-fail' : 'ci', text: `CI ${x.outcome || 'checked'}${pr ? ' on PR ' + pr : ''}`, lane: L({ step: 'ci', ci: x.outcome || 'passed' }) }); break;
+      case 'review': {
+        if (V.stage < stageIdx('rev')) goStage('rev', 'Pull requests are ready for review');
+        const me = who(r.sid), rv = x.verdict || 'reviewed';
+        const verb = rv === 'approved' ? 'Approved' : rv === 'changes' ? 'Changes requested on' : 'Reviewed';
+        emit({ k: 'msg', from: me, to: lane && lane !== me ? lane : 'github', tag: rv === 'changes' ? 'changes' : 'review', text: `${verb} PR ${pr || ''}${x.body ? ': ' + x.body : ''}`.replace(/\s+:/, ':'), lane: L({ step: 'review', review: rv }) });
+        if (lane && lane !== me) packet(me, 'github', !LS.replay);
+        break;
+      }
+      case 'pr_merge': emit({ k: 'msg', from: a, to: 'github', tag: 'merge', text: pr ? `Merged PR ${pr}` : 'Merged a pull request', lane: L({ step: 'merged' }) }); break;
+      case 'issue': if (V.stage < stageIdx('plan')) goStage('plan', 'Plan the work'); emit({ k: 'msg', from: who(r.sid), to: 'github', tag: 'issue', text: `Created issue${x.title ? ': ' + x.title : ''}` }); break;
+      case 'repo': emit({ k: 'msg', from: a, to: 'github', tag: 'repo', text: `Created repo ${x.repo || ''}${x.template ? ' from ' + x.template : ''}`.trim() }); break;
+      case 'protect': emit({ k: 'msg', from: a, to: 'github', tag: 'guard', text: 'Turned on branch protection for main' }); break;
+      case 'pages':
+        if (V.stage >= stageIdx('rev')) goStage('rel', 'Start the release');
+        emit(x.url ? { k: 'msg', from: who(r.sid), to: 'human', tag: 'live', text: `Live: ${x.url}` } : { k: 'msg', from: who(r.sid), to: 'github', tag: 'deploy', text: 'Checked GitHub Pages' });
+        if (x.url && V.stage === stageIdx('rel')) finish();
+        break;
+      case 'brd': if (V.stage < stageIdx('req')) goStage('req', 'Gather the requirements'); emit({ k: 'action', from: who(r.sid), tag: 'file', text: `Wrote ${x.path}` }); break;
+      case 'plan': if (V.stage < stageIdx('plan')) goStage('plan', 'Plan the work'); emit({ k: 'action', from: who(r.sid), tag: 'file', text: `Wrote ${x.path}` }); break;
+      case 'docs': emit({ k: 'action', from: a, tag: 'docs', text: `Wrote ${x.path}`, quiet }); break;
+      case 'approval': {
+        const gates = (x.gates || []).filter(g => V.gates[g] !== 'approved');
+        gates.forEach(g => emit({ k: 'gateDone', gate: g, from: 'human', to: voice(), tag: 'gate', text: `${g} approved · recorded in ${x.path}` }));
+        if (!gates.length) emit({ k: 'action', from: a, tag: 'file', text: `Updated ${x.path}`, quiet });
+        break;
+      }
+      case 'file': emit({ k: 'action', from: a, tag: 'file', text: `Edited ${x.path}`, quiet, lane: L({ step: 'code' }) }); break;
+    }
+  }
+
+  function onLive(r) {
+    LS.events++;
+    if (r.ts) LS.last = tfmt.format(new Date(r.ts * 1000));
+    const sid = r.sid;
+    switch (r.type) {
+      case 'turn_start': {
+        if (isChild(sid)) return;
+        const text = (r.text || '').replace(/\s*\(This order came from the Agent Room website[\s\S]*$/, '');
+        const cmd = (text.match(/^\s*\/(sdlc-[a-z]+)/) || [])[1];
+        if (cmd === 'sdlc-project' && (V.stage > 0 || V.stats.messages > 0)) newRun();
+        if (cmd === 'sdlc-project') goStage('orch');
+        const via = r.platform === 'telegram' ? 'telegram' : /api/i.test(r.platform || '') ? 'web' : 'command';
+        emit({ k: 'msg', from: 'human', to: voice(), tag: via, text: text || '(message)' });
+        if (cmd && cmd !== 'sdlc-project') skillStage(cmd);
+        return;
+      }
+      case 'turn_end':
+        if (isChild(sid)) return;
+        emit({ k: 'msg', from: voice(), to: 'human', tag: 'reply', text: r.text || '(reply)' });
+        (r.gates || []).forEach(g => emit({ k: 'gateAsk', gate: g, q: GATE_Q[g], from: voice(), to: 'human' }));
+        if (V.stage === stageIdx('rel') && !V.finished && /https:\/\/[\w.-]+\.github\.io\//.test(r.text || '')) finish();
+        return;
+      case 'skill': skillStage(r.name); return;
+      case 'tool_start': {
+        if (r.tool === 'skill_view' && SKILL_STAGE[r.summary]) skillStage(r.summary);
+        const a = who(sid), lane = laneFor(a);
+        emit({ k: 'action', from: a, tag: 'tool', text: `${r.tool}${r.summary ? ': ' + r.summary : ''}`, quiet: !LS.showTools, lane: lane && V.lanes[lane].step < 1 ? { id: lane, step: 'code' } : undefined });
+        return;
+      }
+      case 'tool_end': {
+        const a = who(sid);
+        if (r.status && r.status !== 'ok') emit({ k: 'action', from: a, tag: 'error', text: `${r.tool} ${r.status}${r.error ? ': ' + r.error : ''}`, quiet: !LS.showTools });
+        (r.actions || []).forEach(x => onAction(a, x, r));
+        return;
+      }
+      case 'sub_start': {
+        if (isChild(r.parent)) { LS.child.set(r.child, who(r.parent)); return; } // helper of a helper: same lane
+        const text = r.goal || r.role || 'Sub-task';
+        let agent;
+        if (/\breview/i.test(`${r.role || ''} ${text}`) && V.stage >= stageIdx('dev')) {
+          goStage('rev', 'Pull requests are ready for review'); agent = 'rev';
+        } else {
+          goStage('dev', 'Plan approved. Start development');
+          const br = branchIn(text), prm = (text.match(/#(\d+)/) || [])[1];
+          const reuse = (br && LANES.find(id => V.lanes[id].branch === br)) || (prm && LS.prLane.get('#' + prm));
+          if (reuse) { LS.laneOwner[reuse] = r.child; LS.laneUsed[reuse] = ++LS.laneSeq; }
+          agent = reuse || assignLane(r.child);
+          if (reuse) {
+            LS.child.set(r.child, agent);
+            emit({ k: 'handoff', from: voice() === agent ? 'orch' : voice(), to: agent, tag: 'handoff', text, lane: { id: agent, done: '' } });
+            return;
+          }
+        }
+        LS.child.set(r.child, agent);
+        const from = voice() === agent ? 'orch' : voice();
+        emit({ k: 'handoff', from, to: agent, tag: 'handoff', text, lane: laneFor(agent) ? { id: agent, step: 'assigned', task: text.slice(0, 90), branch: branchIn(text), reset: true } : undefined });
+        return;
+      }
+      case 'sub_stop': {
+        const agent = LS.child.get(r.child);
+        if (!agent) return;
+        if (LS.laneOwner[agent] === r.child) LS.laneOwner[agent] = null;
+        const st = r.status || 'completed', parent = who(r.parent);
+        emit({ k: 'msg', from: agent, to: parent === agent ? 'orch' : parent, tag: st === 'completed' ? 'done' : 'error', text: `${st === 'completed' ? 'Done' : 'Stopped (' + st + ')'}${r.summary ? ': ' + r.summary : ''}`, lane: laneFor(agent) ? { id: agent, done: st } : undefined });
+        return;
+      }
+      case 'human_ask':
+        if (r.kind === 'approval') return;
+        emit({ k: 'msg', from: who(sid), to: 'human', tag: 'question', text: r.text || 'Needs your input' });
+        V.nodes.human = 'waiting'; if (!LS.replay) renderNodes();
+        return;
+      case 'human_answer':
+        if (r.kind === 'approval') return;
+        V.nodes.human = 'idle';
+        emit({ k: 'msg', from: 'human', to: who(sid), tag: 'answer', text: `Answered (${r.outcome || 'ok'})` });
+        return;
+      case 'approval_ask': emit({ k: 'msg', from: voice(), to: 'human', tag: 'approval', text: `Asks before running: ${r.command || r.description || 'a command'}` }); return;
+      case 'approval_answer': emit({ k: 'msg', from: 'human', to: voice(), tag: 'approval', text: `Answer: ${r.choice || 'unknown'}` }); return;
+      case 'turn_stopped': emit({ k: 'action', from: who(sid), tag: 'error', text: r.interrupted ? 'Turn stopped' : 'Turn failed' }); return;
+    }
+  }
+
+  function connState(cls, text) { const el = $('connState'); el.className = 'conn-state ' + cls; el.textContent = text; }
+
+  // ----- Cloud source: poll Supabase agent_room_read -----
+  const CL = { timer: null, lastId: 0, busy: false, fails: 0, gen: 0 };
+  async function cloudRead(after) {
+    const r = await fetch(`${CLOUD.url}/rest/v1/rpc/agent_room_read`, {
+      method: 'POST', cache: 'no-store',
+      headers: { apikey: CLOUD.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ read_key: CLOUD.read, after_id: after, max_rows: after > 0 ? 1000 : 4000 }),
+    });
+    if (!r.ok) {
+      let msg = ''; try { msg = (await r.json()).message || ''; } catch (e) {}
+      const err = new Error(msg || `Supabase answered ${r.status}`); err.status = r.status; err.badKey = /wrong read key/i.test(msg); throw err;
+    }
+    return r.json();
+  }
+  function cloudStop() { clearTimeout(CL.timer); CL.timer = null; CL.gen++; }
+  async function cloudTick(gen) {
+    if (gen !== CL.gen || P.mode !== 'stream') return;
+    if (document.hidden) { CL.timer = setTimeout(() => cloudTick(gen), 3000); return; }
+    let next = 2000;
+    try {
+      const first = CL.lastId === 0 && LS.replay;
+      const rows = await cloudRead(CL.lastId);
+      if (gen !== CL.gen) return;
+      for (const row of rows) {
+        CL.lastId = Math.max(CL.lastId, row.id);
+        try { onLive(row.event || {}); } catch (err) { console.warn('agent-room: skipped an event', err); }
+      }
+      if (first) {
+        LS.replay = false; render();
+        $('feed').scrollTop = $('feed').scrollHeight;
+        if (!LS.events) setNow('<p>Connected. Send the bot a message in Telegram, or run /sdlc-project, and the agents show up here.</p>');
+      }
+      if (rows.length >= 1000) next = 50; // still catching up
+      CL.fails = 0;
+      connState('on', 'Live');
+      $('streamInfo').textContent = `${LS.events} events · last ${LS.last || '—'}`;
+    } catch (e) {
+      if (gen !== CL.gen) return;
+      if (e.badKey) {
+        connState('off', 'Wrong read key in the link');
+        $('streamNote').textContent = 'The #read=… part of the address does not match your Supabase project. Use the dashboard link from the setup guide.';
+        return; // stop polling
+      }
+      CL.fails++;
+      next = Math.min(30000, 2000 * 2 ** Math.min(CL.fails, 4));
+      connState('wait', `Reconnecting… (${e.message || 'network error'})`);
+    }
+    CL.timer = setTimeout(() => cloudTick(gen), next);
+  }
+  function cloudConnect() {
+    cloudStop();
+    CL.lastId = 0; CL.fails = 0; LS.replay = true; LS.events = 0;
+    connState('wait', 'Connecting…');
+    $('streamNote').textContent = 'Shows your Hermes agents as they work. Events go from the agent-room plugin on your server to Supabase, and this page checks for new ones every 2 seconds. The board starts fresh each time you run /sdlc-project.';
+    const gen = CL.gen;
+    cloudTick(gen);
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && P.mode === 'stream' && CLOUD.read && CL.timer) { clearTimeout(CL.timer); cloudTick(CL.gen); }
+  });
+
+  // ----- Orders: send work to the agents from the website (needs #send=... in the link) -----
+  const OR = { timer: null, busy: false, list: [] };
+  const ORDER_LABEL = { queued: 'waiting', taken: 'sent to server', running: 'agents working', waiting: 'needs approval', done: 'done', failed: 'failed' };
+  async function orderRpc(name, body) {
+    const r = await fetch(`${CLOUD.url}/rest/v1/rpc/${name}`, {
+      method: 'POST', cache: 'no-store',
+      headers: { apikey: CLOUD.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ send_key: CLOUD.send, ...body }),
+    });
+    if (!r.ok) {
+      let msg = ''; try { msg = (await r.json()).message || ''; } catch (e) {}
+      const err = new Error(msg.replace(/^agent_room:\s*/, '') || `Supabase answered ${r.status}`); err.badKey = /wrong send key/i.test(msg); throw err;
+    }
+    return r.json();
+  }
+  function orderNote(cls, text) { const st = $('orderStatus'); st.className = 'status ' + cls; st.textContent = text; }
+  async function sendOrder(kind, text) {
+    if (OR.busy) return false;
+    OR.busy = true; $('orderProject').disabled = $('orderReply').disabled = true;
+    try {
+      await orderRpc('agent_room_send', { message: text || '', kind });
+      orderNote('ok', kind === 'project' ? 'Order sent. The agents start in a few seconds.' : kind === 'stop' ? 'Stop sent.' : 'Sent.');
+      pollOrders();
+      return true;
+    } catch (e) {
+      orderNote('err', e.badKey ? 'The send key in your link is wrong. Use the full link from the setup page.' : `Could not send: ${e.message}`);
+      return false;
+    } finally { OR.busy = false; $('orderProject').disabled = $('orderReply').disabled = false; }
+  }
+  function renderOrders() {
+    const rows = OR.list.slice(-5).reverse();
+    $('orders').innerHTML = rows.map(o => {
+      const label = ORDER_LABEL[o.status] || o.status;
+      const what = o.kind === 'project' ? 'New project: ' + o.text : o.kind === 'approve_once' ? 'Approve the command' : o.kind === 'deny' ? 'Deny the command' : o.kind === 'stop' ? 'Stop the run' : o.text;
+      const act = o.status === 'waiting'
+        ? `<span class="oact"><button class="qbtn" type="button" data-kind="approve_once">Approve command</button><button class="qbtn warn" type="button" data-kind="deny">Deny</button></span>` : '';
+      return `<li><span class="pill s-${esc(o.status)}">${esc(label)}</span><span class="otext">${esc(what)}</span>${o.note ? `<span class="onote">${esc(o.note)}</span>` : ''}${act}</li>`;
+    }).join('');
+    const stuck = OR.list.find(o => o.status === 'queued' && Date.now() - new Date(o.created_at).getTime() > 30000);
+    if (stuck && !$('orderStatus').classList.contains('err')) orderNote('err', 'Your server has not picked up the order yet. Check that the bridge is running: systemctl --user status agent-room-bridge');
+  }
+  async function pollOrders() {
+    clearTimeout(OR.timer);
+    if (P.mode !== 'stream' || !CLOUD.send) return;
+    try {
+      OR.list = await orderRpc('agent_room_my_commands', { max_rows: 8 }) || [];
+      renderOrders();
+    } catch (e) {
+      if (e.badKey) { orderNote('err', 'The send key in your link is wrong. Use the full link from the setup page.'); return; }
+    }
+    OR.timer = setTimeout(pollOrders, document.hidden ? 8000 : 3000);
+  }
+  function orderStart() {
+    $('orderForm').hidden = !CLOUD.send;
+    if (CLOUD.send) pollOrders();
+  }
+  $('orderForm').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const t = $('orderText').value.trim();
+    if (!t) { orderNote('err', 'Write what you want the agents to build.'); $('orderText').focus(); return; }
+    if (await sendOrder('project', t)) $('orderText').value = '';
+  });
+  $('orderReply').addEventListener('click', async () => {
+    const t = $('orderText').value.trim();
+    if (!t) { orderNote('err', 'Write your reply first.'); $('orderText').focus(); return; }
+    if (await sendOrder('message', t)) $('orderText').value = '';
+  });
+  $('orderText').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) $('orderReply').click(); });
+  document.addEventListener('click', (ev) => {
+    const say = ev.target.closest('[data-say]'), fill = ev.target.closest('[data-fill]'), kind = ev.target.closest('[data-kind]');
+    if (!CLOUD.send || P.mode !== 'stream') return;
+    if (say) sendOrder('message', say.dataset.say);
+    else if (fill) { const ta = $('orderText'); ta.value = fill.dataset.fill; ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); ta.scrollIntoView({ block: 'center', behavior: reduced ? 'auto' : 'smooth' }); }
+    else if (kind) sendOrder(kind.dataset.kind, '');
+  });
+
+  function connect() {
+    if (LS.es) { LS.es.close(); LS.es = null; }
+    cloudStop();
+    newRun();
+    orderStart();
+    if (!KEY && CLOUD.read) { cloudConnect(); return; }
+    if (!KEY) {
+      connState('off', 'Not connected');
+      $('streamNote').textContent = 'Open your dashboard link (it ends with #read=…) to watch your agents live. Without it, use Example run to see how it looks.';
+      setNow('<p>Live mode needs your dashboard link. Use Example run to see how it looks.</p>');
+      return;
+    }
+    connState('wait', 'Connecting…');
+    LS.replay = true; LS.events = 0;
+    let es;
+    try { es = new EventSource('events?key=' + encodeURIComponent(KEY)); }
+    catch (e) { connState('off', "Can't open the live stream here"); return; }
+    LS.es = es;
+    es.addEventListener('hello', (m) => { let d = {}; try { d = JSON.parse(m.data); } catch (e) {} LS.replay = !!d.replay; if (!d.replay) connState('on', 'Live'); });
+    es.addEventListener('live', () => {
+      LS.replay = false; render(); connState('on', 'Live');
+      $('feed').scrollTop = $('feed').scrollHeight;
+      if (!LS.events) setNow('<p>Connected. Send the bot a message in Telegram, or run /sdlc-project, and the agents show up here.</p>');
+      $('streamInfo').textContent = `${LS.events} events · last ${LS.last || '—'}`;
+    });
+    es.onmessage = (m) => {
+      try { onLive(JSON.parse(m.data)); } catch (err) { console.warn('agent-room: skipped an event', err); }
+      if (!LS.replay) $('streamInfo').textContent = `${LS.events} events · last ${LS.last || '—'}`;
+    };
+    es.onerror = () => {
+      if (es.readyState === 2) connState('off', 'Disconnected. Check the key and that the server is running, then reload.');
+      else connState('wait', 'Reconnecting…');
+    };
+  }
+  $('showTools').addEventListener('change', (e) => { LS.showTools = e.target.checked; });
+  $('btnClear').addEventListener('click', () => { newRun(); });
+
+  const DEMO = buildDemo();
+  function setMode(m) {
+    P.mode = m;
+    clearTimeout(P.timer); P.playing = false; P.waiting = null;
+    if (m !== 'stream' && LS.es) { LS.es.close(); LS.es = null; }
+    if (m !== 'stream') { cloudStop(); clearTimeout(OR.timer); }
+    $('modeStream').setAttribute('aria-pressed', m === 'stream');
+    $('modeDemo').setAttribute('aria-pressed', m === 'demo');
+    $('modeLive').setAttribute('aria-pressed', m === 'live');
+    $('livePanel').hidden = m !== 'live';
+    $('streamPanel').hidden = m !== 'stream';
+    $('player').hidden = m === 'stream';
+    if (m === 'stream') {
+      $('subtitle').innerHTML = 'Live · your Hermes agents as they work';
+      $('foot').textContent = 'Live mode reads the agent-room plugin on your server. The main Hermes agent plays each stage role in turn, so its messages show under the stage that is running. Sub-agents get their own lanes.';
+      connect();
+    } else if (m === 'demo') {
+      $('subtitle').innerHTML = 'Example run · <span class="mono">tip-calculator</span> · sample data';
+      $('foot').textContent = 'The example run is sample data that shows how a pipeline run looks. Switch to Live repo to replay a real project from your bot account.';
+      load(DEMO);
+    } else {
+      $('ghRepo').focus();
+    }
+  }
+  $('modeStream').addEventListener('click', () => setMode('stream'));
+  $('modeDemo').addEventListener('click', () => setMode('demo'));
+  $('modeLive').addEventListener('click', () => setMode('live'));
+
+  $('liveForm').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const owner = $('ghOwner').value.trim(), repo = $('ghRepo').value.trim(), token = $('ghToken').value.trim();
+    const st = $('liveStatus');
+    if (!owner || !repo) { st.className = 'status err'; st.textContent = 'Enter the GitHub account and the repository name.'; return; }
+    st.className = 'status'; st.textContent = `Reading ${owner}/${repo} from GitHub…`;
+    $('liveGo').disabled = true;
+    try {
+      const res = await buildLive(owner, repo, token);
+      st.className = 'status ok';
+      st.textContent = `Loaded ${res.name}: ${res.msgCount} events from ${res.calls} GitHub calls. Press Play to replay it.`;
+      $('subtitle').innerHTML = `Live repo · <a class="mono" href="${esc(res.url)}" target="_blank" rel="noopener">${esc(res.name)}</a> · rebuilt from GitHub history`;
+      $('foot').textContent = 'Live mode rebuilds the run from GitHub history. Handoffs between stages are placed at the time of the first file or pull request of each stage.';
+      P.events = res.events; restart(true);
+    } catch (e) {
+      st.className = 'status err';
+      st.textContent = e.blocked
+        ? "This preview can't reach GitHub. Host this page on GitHub Pages (or open the file in your browser) and live mode will work."
+        : e.message;
+    } finally { $('liveGo').disabled = false; }
+  });
+
+  setMode(KEY || CLOUD.read || CLOUD.send ? 'stream' : 'demo');
+})();
+</script>
+
+</body>
+</html>

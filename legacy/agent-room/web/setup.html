@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<title>Agent Room Setup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@700;800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one column checklist. Numbered steps (the order matters), each with its command and what you should see. */
+:root {
+  --bg: #EDF0F4; --surface: #FFFFFF; --surface-2: #F5F7FA; --ink: #14202F; --muted: #586679;
+  --line: #D4DBE4; --accent: #3F4BC4; --ok: #1F7A45; --ok-bg: #E3F3E9; --warn: #A86200; --warn-bg: #FCF1DE;
+  --code-bg: #14202F; --code-ink: #E4E9F0; --code-dim: #94A1B3; --key: #F0A940;
+  --f-display: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F1520; --surface: #161E2B; --surface-2: #1C2533; --ink: #E4E9F0; --muted: #94A1B3;
+    --line: #2A3546; --accent: #8C95F5; --ok: #5CC88A; --ok-bg: #12301F; --warn: #F0A940; --warn-bg: #3A2A10;
+    --code-bg: #0A0F17; --code-ink: #E4E9F0; --code-dim: #7E8BA0; --key: #F0A940; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F1520; --surface: #161E2B; --surface-2: #1C2533; --ink: #E4E9F0; --muted: #94A1B3;
+  --line: #2A3546; --accent: #8C95F5; --ok: #5CC88A; --ok-bg: #12301F; --warn: #F0A940; --warn-bg: #3A2A10;
+  --code-bg: #0A0F17; --code-ink: #E4E9F0; --code-dim: #7E8BA0; --key: #F0A940; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 48px; }
+.wrap { max-width: 760px; margin: 0 auto; display: grid; gap: 16px; }
+h1, h2 { font-family: var(--f-display); margin: 0; text-wrap: balance; }
+h1 { font-size: clamp(26px, 5vw, 36px); font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+.lead { margin: 6px 0 0; color: var(--muted); }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.keys { border-radius: 10px; padding: 12px 14px; font-size: 14px; border: 1px solid var(--line); background: var(--surface); }
+.keys.ok { border-color: var(--ok); background: var(--ok-bg); }
+.keys.miss { border-color: var(--warn); background: var(--warn-bg); }
+.progress { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+.bar { flex: 1; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .3s; }
+ol.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; counter-reset: s; }
+.step { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 16px 14px 62px; min-width: 0; }
+.step::before { counter-increment: s; content: counter(s); position: absolute; left: 16px; top: 14px; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center;
+  font: 600 14px var(--f-mono); background: var(--surface-2); border: 1.5px solid var(--line); color: var(--muted); }
+.step.done::before { content: "✓"; background: var(--ok-bg); border-color: var(--ok); color: var(--ok); }
+.step h2 { font-size: 17px; font-weight: 700; display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.where { font: 500 11px var(--f-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); white-space: nowrap; }
+.step p { margin: 4px 0 0; }
+.step .hint { color: var(--muted); font-size: 13.5px; }
+.cmd { display: flex; align-items: flex-start; gap: 10px; margin-top: 8px; padding: 10px 10px 10px 14px; background: var(--code-bg); color: var(--code-ink); border-radius: 8px; min-width: 0; }
+.cmd pre { flex: 1 1 auto; min-width: 0; margin: 0; padding-top: 2px; font: 13px/1.55 var(--f-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.cmd .k { color: var(--key); font-weight: 500; }
+.copy { flex: 0 0 auto; font: 500 12px var(--f-body); color: var(--code-ink); background: transparent;
+  border: 1px solid var(--code-dim); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+.copy:hover { border-color: var(--code-ink); }
+.see { margin-top: 8px; font-size: 13px; color: var(--muted); }
+.see code { font-family: var(--f-mono); color: var(--ok); font-size: 12.5px; }
+.mark { margin-top: 10px; display: inline-flex; gap: 8px; align-items: center; font-size: 13.5px; color: var(--muted); cursor: pointer; }
+.btn { display: inline-block; margin-top: 8px; background: var(--accent); color: var(--surface); text-decoration: none; font-weight: 600; padding: 9px 16px; border-radius: 8px; }
+.btn.off { background: var(--line); color: var(--muted); pointer-events: none; }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; }
+summary { cursor: pointer; font-weight: 600; }
+dl.fix { margin: 10px 0 0; display: grid; gap: 10px; }
+dl.fix dt { font: 500 13px var(--f-mono); color: var(--warn); }
+dl.fix dd { margin: 2px 0 0; font-size: 14px; }
+dl.fix code, .step code { font-family: var(--f-mono); font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+.foot { color: var(--muted); font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Agent Room Setup</h1>
+    <p class="lead">Do these steps in order. It takes about 10 minutes. Tick each step when it works.</p>
+  </header>
+
+  <div class="keys" id="keys" role="status"></div>
+  <div class="progress"><span id="count">0 of 7 done</span><span class="bar"><i id="fill"></i></span></div>
+
+  <ol class="steps">
+    <li class="step" data-step="1">
+      <h2>Find your SSH key <span class="where">Your PC</span></h2>
+      <p>In your <b>Downloads</b> folder, use <code>ssh-key-2026-09-30.key</code>. Pick the <b>2 KB</b> one whose type is <b>KEY File</b>.</p>
+      <p class="hint">The 1 KB one that shows as "Microsoft Publisher" is the public key (.pub). Don't use it.</p>
+      <label class="mark"><input type="checkbox"> Found it</label>
+    </li>
+
+    <li class="step" data-step="2">
+      <h2>Fix the key's permissions <span class="where">CMD · once</span></h2>
+      <p>Open <b>Command Prompt</b> (CMD) and run:</p>
+      <div class="cmd"><pre>icacls "C:\Users\Admin\Downloads\ssh-key-2026-09-30.key" /inheritance:r /grant:r "%USERNAME%:R"</pre><button class="copy" type="button">Copy</button></div>
+      <p class="see">You should see <code>Successfully processed 1 files</code></p>
+      <label class="mark"><input type="checkbox"> Done</label>
+    </li>
+
+    <li class="step" data-step="3">
+      <h2>Log in to the server <span class="where">CMD</span></h2>
+      <div class="cmd"><pre>ssh -i "C:\Users\Admin\Downloads\ssh-key-2026-09-30.key" ubuntu@84.235.244.195</pre><button class="copy" type="button">Copy</button></div>
+      <p class="hint">The first time, type <code>yes</code> and press Enter.</p>
+      <p class="see">You should see <code>ubuntu@hermes-server:~$</code></p>
+      <label class="mark"><input type="checkbox"> I'm in</label>
+    </li>
+
+    <li class="step" data-step="4">
+      <h2>Install Agent Room <span class="where">Server</span></h2>
+      <p>Paste this on the server. It installs the plugin, turns on the Hermes API server (only reachable from the server itself), starts the bridge that brings your website orders to Hermes, and restarts Hermes.</p>
+      <div class="cmd"><pre>curl -fsSL https://hermes-agent-room.vercel.app/get.sh | bash -s -- --write-key <span class="k" data-key="write"></span></pre><button class="copy" type="button">Copy</button></div>
+      <p class="see">You should see <code>Supabase accepted the write key.</code>, <code>Bridge is running</code> and <code>Agent Room plugin is installed.</code></p>
+      <label class="mark"><input type="checkbox"> Installed</label>
+    </li>
+
+    <li class="step" data-step="5">
+      <h2>Test with a fake run <span class="where">Server</span></h2>
+      <div class="cmd"><pre>python3 ~/agent-room/simulate_run.py</pre><button class="copy" type="button">Copy</button></div>
+      <p class="see">After about 1 minute you should see <code>Sent to Supabase: 120 events</code></p>
+      <label class="mark"><input type="checkbox"> Test passed</label>
+    </li>
+
+    <li class="step" data-step="6">
+      <h2>Open your dashboard <span class="where">Browser</span></h2>
+      <p>The fake run from step 5 should be on the board. Keep this link private.</p>
+      <a class="btn" id="dash" target="_blank" rel="noopener">Open dashboard</a>
+      <label class="mark"><input type="checkbox"> I see the run</label>
+    </li>
+
+    <li class="step" data-step="7">
+      <h2>Give your first order <span class="where">Dashboard</span></h2>
+      <p>On the dashboard, type what you want in the box <b>Give the agents an order</b>, for example:</p>
+      <div class="cmd"><pre>Create a calculator web app with a history of past results</pre><button class="copy" type="button">Copy</button></div>
+      <p class="hint">Press <b>Start new project</b>. The board starts fresh and you watch each agent work. Answer the agents' questions with <b>Send reply</b>, then press <b>Approve</b> when the BRD (gate G1) is ready. After that the agents finish everything on their own, up to the live app. Press <b>Stop the run</b> at any time to take back control.</p>
+      <label class="mark"><input type="checkbox"> Working</label>
+    </li>
+  </ol>
+
+  <details>
+    <summary>If something goes wrong</summary>
+    <dl class="fix">
+      <div><dt>Identity file ... not accessible</dt><dd>The path is wrong. In CMD use the full path <code>C:\Users\Admin\...</code>, not <code>$HOME</code> (that only works in PowerShell).</dd></div>
+      <div><dt>UNPROTECTED PRIVATE KEY FILE</dt><dd>Do step 2, then try step 3 again.</dd></div>
+      <div><dt>Permission denied (publickey)</dt><dd>You used the 1 KB .pub file, or the user is not <code>ubuntu</code>. Use the 2 KB KEY File.</dd></div>
+      <div><dt>Supabase check failed</dt><dd>Check that the whole command from step 4 was pasted, then run it again.</dd></div>
+      <div><dt>hermes: command not found</dt><dd>Run <code>source ~/.bashrc</code>, then step 4 again.</dd></div>
+      <div><dt>Dashboard says "Reconnecting"</dt><dd>Supabase pauses free projects after a week without use. Open supabase.com, project <b>hermes-agent-room</b>, and press Restore.</dd></div>
+      <div><dt>Order stays "waiting"</dt><dd>The bridge is not running. On the server: <code>systemctl --user status agent-room-bridge</code>. Logs: <code>journalctl --user -u agent-room-bridge -n 50</code>. Then run step 4 again.</dd></div>
+      <div><dt>Order "failed" with "Hermes refused"</dt><dd>The Hermes API server is off. Run step 4 again; it turns it on and restarts Hermes.</dd></div>
+      <div><dt>Fake run works, real run shows nothing</dt><dd>On the server: <code>hermes plugins list</code> should show agent-room as enabled. If not: <code>hermes plugins enable agent-room</code> then <code>hermes gateway restart</code>.</dd></div>
+    </dl>
+  </details>
+
+  <p class="foot">Your keys stay in this link after the # sign. Browsers never send that part to the website.</p>
+</div>
+<script>
+(() => {
+  let h; try { h = new URLSearchParams(location.hash.slice(1)); } catch (e) { h = new URLSearchParams(); }
+  const write = h.get('write') || '', read = h.get('read') || '', send = h.get('send') || '';
+  document.querySelectorAll('[data-key="write"]').forEach(el => { el.textContent = write || '<WRITE_KEY>'; });
+  const dash = document.getElementById('dash');
+  if (read) dash.href = 'https://hermes-agent-room.vercel.app/#read=' + encodeURIComponent(read) + (send ? '&send=' + encodeURIComponent(send) : '');
+  else { dash.classList.add('off'); dash.textContent = 'Open dashboard (needs your link)'; }
+  const keys = document.getElementById('keys');
+  if (write && read) { keys.className = 'keys ok'; keys.textContent = 'Your keys are filled in from this link. Copy the commands as they are.'; }
+  else { keys.className = 'keys miss'; keys.textContent = 'Your keys are missing. Open the private setup link Claude gave you, so they fill in by themselves.'; }
+
+  document.querySelectorAll('.copy').forEach(btn => btn.addEventListener('click', () => {
+    const pre = btn.parentElement.querySelector('pre');
+    const text = pre.textContent;
+    const done = (ok) => { btn.textContent = ok ? 'Copied' : 'Select it'; setTimeout(() => { btn.textContent = 'Copy'; }, 1500); };
+    const select = () => { const r = document.createRange(); r.selectNodeContents(pre); const s = getSelection(); s.removeAllRanges(); s.addRange(r); };
+    try { navigator.clipboard.writeText(text).then(() => done(true), () => { select(); done(false); }); }
+    catch (e) { select(); done(false); }
+  }));
+
+  const KEY = 'agent-room-setup-done';
+  let saved = {}; try { saved = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) {}
+  const steps = [...document.querySelectorAll('.step')];
+  const update = () => {
+    let n = 0;
+    steps.forEach(s => { const on = s.querySelector('input').checked; s.classList.toggle('done', on); if (on) n++; saved[s.dataset.step] = on; });
+    document.getElementById('count').textContent = `${n} of ${steps.length} done`;
+    document.getElementById('fill').style.width = (n / steps.length * 100) + '%';
+    try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {}
+  };
+  steps.forEach(s => { const cb = s.querySelector('input'); cb.checked = !!saved[s.dataset.step]; cb.addEventListener('change', update); });
+  update();
+})();
+</script>
+</body>
+</html>
