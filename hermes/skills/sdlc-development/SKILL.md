@@ -85,8 +85,11 @@ Tasks marked `assignee: devin` go to Devin through the Devin MCP tools.
    the test and lint commands, and the rule "open a pull request and do not merge it".
 2. Always set `max_acu_limit` on the session. Use the limit given in the order or settings.
    If none is given, use a small limit (for example 5). Never leave it unset.
-3. Check the session until it finishes (talk to it with `devin_session_interact`). Read its pull request like any other coder's.
-4. Treat Devin's questions like Team sync comments: answer them from the contract.
+3. Write the session down so the website can follow it. Append one line with the terminal tool (the project id is
+   the folder name of your Workspace folder):
+   `mkdir -p ~/.hermes/platform && printf '%s\n' '{"session_id":"<session id>","project_id":"<project id>","task":"Task <number>"}' >> ~/.hermes/platform/devin_sessions.json`
+4. Check the session until it finishes (talk to it with `devin_session_interact`). Read its pull request like any other coder's.
+5. Treat Devin's questions like Team sync comments: answer them from the contract.
 
 **Fallback:** if the Devin tools are missing, return an error, the session fails, or the limit is
 reached before the pull request exists, do not wait. Say so in Team sync, and build that task

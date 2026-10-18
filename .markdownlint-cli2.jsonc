@@ -8,6 +8,6 @@
     "MD041": false,
     "MD060": false
   },
-  "globs": ["README.md", "docs/**/*.md", "hermes/skills/**/*.md", "supabase/**/*.md", "apps/web/**/*.md"],
+  "globs": ["README.md", "docs/**/*.md", "hermes/skills/**/*.md", "supabase/**/*.md", "apps/web/**/*.md", "template/**/*.md", "hermes/devin/**/*.md"],
   "ignores": ["**/node_modules/**", "legacy/**", "**/.next/**", "docs/IMPLEMENTATION_PLAN.md"]
 }

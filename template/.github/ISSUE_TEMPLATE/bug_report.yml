@@ -1,0 +1,59 @@
+name: Bug report
+description: A structured bug report. Used by the QA agent (labelled "bug").
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: input
+    id: requirement
+    attributes:
+      label: Requirement
+      description: The requirement ID from docs/BRD.md that fails, for example BR-03 or NFR-02.
+      placeholder: BR-03
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: Blocker = the main use does not work. Major = an important requirement fails. Minor = small problem, can ship.
+      options:
+        - blocker
+        - major
+        - minor
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Test name, screenshot link, or log lines. Never paste secrets or personal data.
+    validations:
+      required: true
+  - type: input
+    id: address
+    attributes:
+      label: Site address and commit
+      description: The staging address and commit that were tested.
+      placeholder: https://example.vercel.app (abc1234)

@@ -1,0 +1,122 @@
+# Deploy to Vercel.
+#   staging     every push to main (also: run by hand with target=staging)
+#   production  a tag named release-* (for example release-1) or a manual run with target=production,
+#               only after QA signed off (docs/QA.md says "QA result: passed") and CI is green.
+#
+# Where the agents find the address:
+#   * the job summary of the run,
+#   * a commit status on the deployed commit: context "staging-url" or "production-url" (target_url = the address),
+#   * a GitHub deployment in the environment "staging" or "production" (environment_url = the address).
+#
+# Secrets needed (repository settings > Secrets and variables > Actions):
+#   VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID
+# Optional repository variable: PRODUCTION_URL (a custom domain, for example https://my-site.example).
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    tags: ["release-*"]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Where to deploy. Production needs a QA sign-off."
+        type: choice
+        options: [production, staging]
+        default: production
+
+permissions:
+  contents: read
+
+env:
+  VERCEL_CLI_VERSION: "64.5.0"
+
+jobs:
+  staging:
+    name: deploy-staging
+    if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.target == 'staging') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    environment:
+      name: staging
+      url: ${{ steps.deploy.outputs.url }}
+    permissions:
+      contents: read
+      statuses: write
+      deployments: write
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Set up Node
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: 22
+
+      - name: Install the Vercel CLI
+        run: npm install --global "vercel@${VERCEL_CLI_VERSION}"
+
+      - name: Deploy to staging
+        id: deploy
+        run: bash scripts/vercel-deploy.sh staging
+
+      - name: Publish the staging address
+        env:
+          SITE_URL: ${{ steps.deploy.outputs.url }}
+        run: bash scripts/publish-url.sh staging "$SITE_URL"
+
+  production:
+    name: deploy-production
+    if: ${{ startsWith(github.ref, 'refs/tags/release-') || (github.event_name == 'workflow_dispatch' && inputs.target == 'production') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+    permissions:
+      contents: read
+      statuses: write
+      deployments: write
+      checks: read
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Check that the release is allowed
+        run: bash scripts/verify-release.sh
+
+      - name: Set up Node
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: 22
+
+      - name: Install the Vercel CLI
+        run: npm install --global "vercel@${VERCEL_CLI_VERSION}"
+
+      - name: Deploy to production
+        id: deploy
+        run: bash scripts/vercel-deploy.sh production
+
+      - name: Publish the production address
+        env:
+          SITE_URL: ${{ steps.deploy.outputs.url }}
+        run: bash scripts/publish-url.sh production "$SITE_URL"
