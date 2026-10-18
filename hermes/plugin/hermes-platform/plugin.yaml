@@ -1,0 +1,18 @@
+name: hermes-platform
+version: 2.0.0
+description: "Records what Hermes agents do (messages, tool calls, sub-agents, skills, git and GitHub steps, Team sync comments, QA results, deploy links, Devin tool calls) as sanitized events for the Hermes Platform website. Observer only: never blocks or changes a tool call."
+author: "Mohammad Houmani"
+provides_hooks:
+  - on_session_start
+  - pre_llm_call
+  - post_llm_call
+  - pre_tool_call
+  - post_tool_call
+  - on_skill_lifecycle
+  - subagent_start
+  - subagent_stop
+  - on_human_input_request
+  - on_human_input_resolved
+  - pre_approval_request
+  - post_approval_response
+  - on_session_end
