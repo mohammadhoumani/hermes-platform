@@ -246,6 +246,14 @@ function assignLane(s: ViewState, child: string, devin: boolean): LaneId {
   return lane;
 }
 
+/** The lane whose task text says "Task 2" (the Team sync protocol names tasks by number). */
+function laneOfTask(s: ViewState, ref: string | undefined): LaneId | undefined {
+  const m = /(\d+)/.exec(ref ?? "");
+  if (!m) return undefined;
+  const re = new RegExp(`\\btask\\s*#?${m[1]}\\b`, "i");
+  return LANES.find((id) => re.test(s.lanes[id].task));
+}
+
 function laneOfAction(s: ViewState, a: AgentId, x: { pr?: string | number | null; branch?: string }): LaneId | undefined {
   if (isLane(a)) return a;
   const pr = prKey(x.pr);
@@ -332,12 +340,22 @@ function onAction(s: ViewState, a: AgentId, x: ToolAction, ts: number | undefine
       updateLane(s, lane, { stepName: "merged" });
       break;
     case "issue":
-      if (s.phaseIndex < phaseIndexOf("architecture")) goPhase(s, "architecture", ts, "Plan the work");
+      if (x.label === "bug") {
+        say(s, ts, { from: agentOf(s, sid), to: "github", tag: "bug", text: `Reported a bug${x.title ? ": " + x.title : ""}` });
+        break;
+      }
+      if (s.phaseIndex < phaseIndexOf("architecture") && !x.sync && !/team sync/i.test(x.title ?? "")) goPhase(s, "architecture", ts, "Plan the work");
       say(s, ts, { from: agentOf(s, sid), to: "github", tag: "issue", text: `Created issue${x.title ? ": " + x.title : ""}` });
       break;
     case "repo": {
+      const link = safeHttpUrl(x.url) ?? (x.repo && /^[\w.-]+\/[\w.-]+$/.test(x.repo) ? `https://github.com/${x.repo}` : undefined);
+      if (x.url) {
+        // from the project state file: only remember the link (the "created" message came from gh repo create)
+        if (link) s.urls.repo = link;
+        break;
+      }
       say(s, ts, { from: a, to: "github", tag: "repo", text: `Created repo ${x.repo ?? ""}${x.template ? " from " + x.template : ""}`.trim() });
-      if (x.repo && /^[\w.-]+\/[\w.-]+$/.test(x.repo)) s.urls.repo = `https://github.com/${x.repo}`;
+      if (link) s.urls.repo = link;
       break;
     }
     case "protect":
@@ -354,7 +372,11 @@ function onAction(s: ViewState, a: AgentId, x: ToolAction, ts: number | undefine
         say(s, ts, { from: agentOf(s, sid), to: "github", tag: "deploy", text: `Staging site updated${url ? ": " + url : ""}` });
       } else {
         if (s.phaseIndex < phaseIndexOf("release")) goPhase(s, "release", ts, "Start the release");
-        if (url) {
+        if (url && x.src === "output") {
+          // seen in the output of a deploy command: the release may not be finished yet (README, guide). Show it, do not finish.
+          s.urls.production = url;
+          say(s, ts, { from: agentOf(s, sid), to: "github", tag: "deploy", text: `Production deploy is ready: ${url}` });
+        } else if (url) {
           s.urls.production = url;
           say(s, ts, { from: agentOf(s, sid), to: "human", tag: "live", text: `Live: ${url}` });
           finish(s);
@@ -387,7 +409,26 @@ function onAction(s: ViewState, a: AgentId, x: ToolAction, ts: number | undefine
     case "sync": {
       const kind = x.kind ?? "note";
       const text = clip(x.text ?? "", 160) || "Posted on the Team sync issue";
-      say(s, ts, { from: a, to: "orchestrator", tag: "sync", text: `${kind === "blocker" ? "Blocked: " : kind === "question" ? "Question: " : ""}${text}`, lane });
+      const label = { blocker: "Blocked: ", question: "Question: ", interface: "Interface change: ", ready: "Ready: ", note: "" }[kind];
+      // "task 2 -> task 1": show the message travelling between the two coders when their lanes are known
+      const fromLane = laneOfTask(s, x.from);
+      const toLane = laneOfTask(s, x.to);
+      say(s, ts, { from: fromLane ?? a, to: toLane ?? "orchestrator", tag: "sync", text: label + text, lane: fromLane ?? lane });
+      break;
+    }
+    case "devin": {
+      const limit = x.max_acu !== undefined && x.max_acu !== null && x.max_acu !== "" ? ` (limit ${x.max_acu} ACU)` : "";
+      if (x.op === "create" || x.op === undefined) {
+        if (x.failed) {
+          onDevin(s, { type: "devin_failed", sid: x.session, text: `Could not start${x.task ? ": " + x.task : ""}` }, ts);
+        } else {
+          onDevin(s, { type: "devin_started", sid: x.session, task: x.task, text: `${x.task || "Task handed to Devin"}${limit}`, url: x.url }, ts);
+        }
+      } else if (x.op === "interact") {
+        onDevin(s, { type: "devin_progress", sid: x.session, text: x.text }, ts);
+      } else {
+        push(s, ts, { kind: "action", from: "devin", tag: "devin", text: "Checked on Devin", quiet: true, lane: "devin" });
+      }
       break;
     }
     case "qa_result": {

@@ -1,9 +1,10 @@
 /**
- * Types for the event stream (what the Hermes agent-room plugin sends) and for the single
+ * Types for the event stream (what the Hermes hermes-platform plugin sends) and for the single
  * ViewState that the 2D map, the activity feed, the progress rail and the future 3D office all read.
  *
- * Source of truth for the raw events: hermes/plugin/agent-room/__init__.py (hook callbacks).
- * Types marked "planned" are added by plugin v2 / bridge v2 in M2 and M3; the reducer already understands them.
+ * Source of truth for the raw events: hermes/plugin/hermes-platform/__init__.py (hook callbacks).
+ * The v2 plugin (hermes/plugin/hermes-platform/__init__.py) adds the actions sync, qa_result, deploy and devin.
+ * Types marked "planned" are added by the Devin poller in M3; the reducer already understands them.
  */
 
 // ---------------------------------------------------------------------------
@@ -29,8 +30,8 @@ export type ToolAction =
   | { action: "pr_merge"; pr?: string | number | null }
   | { action: "review"; pr?: string | number | null; verdict?: "approved" | "changes" | "reviewed"; body?: string }
   | { action: "ci"; pr?: string | number | null; outcome?: "passed" | "failed" | "running" }
-  | { action: "issue"; title?: string }
-  | { action: "repo"; repo?: string; template?: string }
+  | { action: "issue"; title?: string; /** "bug" for a QA bug report */ label?: string; number?: string | number; /** True for the Team sync issue */ sync?: boolean }
+  | { action: "repo"; repo?: string; template?: string; /** Set when the repo link comes from the project state file */ url?: string }
   | { action: "protect" }
   | { action: "pages"; url?: string }
   | { action: "approval"; path?: string; gates?: string[] }
@@ -38,10 +39,14 @@ export type ToolAction =
   | { action: "plan"; path?: string }
   | { action: "docs"; path?: string }
   | { action: "file"; path?: string; tool?: string }
-  // planned (plugin v2, M2)
-  | { action: "sync"; kind?: "blocker" | "question" | "note"; text?: string; issue?: string | number | null }
-  | { action: "qa_result"; outcome?: "passed" | "failed"; round?: number; bugs?: number; summary?: string }
-  | { action: "deploy"; env?: "staging" | "production"; url?: string };
+  // plugin v2
+  /** A comment on the Team sync issue. `from` and `to` are things like "task 2", "task 1" or "all". */
+  | { action: "sync"; kind?: "blocker" | "question" | "interface" | "ready" | "note"; from?: string; to?: string; text?: string; issue?: string | number | null }
+  | { action: "qa_result"; outcome?: "passed" | "failed"; round?: number; bugs?: number; summary?: string; path?: string }
+  /** `src: "state"` = written to the project state file (final). `src: "output"` = seen in command output (may be early). */
+  | { action: "deploy"; env?: "staging" | "production"; url?: string; src?: "state" | "output" }
+  /** A Devin MCP tool call (devin_session_create / devin_session_interact / others). */
+  | { action: "devin"; op?: "create" | "interact" | "check"; session?: string; task?: string; text?: string; max_acu?: number | string; url?: string; failed?: boolean };
 
 export type ActionName = ToolAction["action"];
 
@@ -59,6 +64,8 @@ export interface TurnStartEvent extends EventBase {
   first?: boolean;
   text?: string;
   skills?: string[];
+  /** Project id, when the bridge put a marker in the order (plugin v2). */
+  project?: string;
 }
 export interface TurnEndEvent extends EventBase {
   type: "turn_end";

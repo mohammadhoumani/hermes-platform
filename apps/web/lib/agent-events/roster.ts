@@ -66,6 +66,10 @@ export const SKILL_PHASE: Record<string, PhaseId | "kickoff"> = {
   "sdlc-qa": "qa",
   "sdlc-release": "release",
   "sdlc-change-request": "development",
+  // names of the first version of the pipeline (still understood, same as the plugin's SKILL_STAGE)
+  "sdlc-project": "kickoff",
+  "sdlc-requirements": "discovery",
+  "sdlc-planning": "architecture",
 };
 
 export const SKILL_NAMES = Object.keys(SKILL_PHASE);
