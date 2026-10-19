@@ -195,33 +195,54 @@ def hermes_home() -> Path:
 
 def docker_workspace_mount(config_yaml: Path) -> Optional[tuple]:
     """When Hermes runs its terminal in Docker, the agents only see the mounted folders. Returns the first
-    (host_dir, container_dir) pair of terminal.docker_volumes, or None for a local terminal."""
+    (host_dir, container_dir) pair of terminal.docker_volumes, or None for a local terminal.
+    Accepts a block list or an inline list, quoted or not, and keys in any order."""
     try:
         lines = config_yaml.read_text(encoding="utf-8").splitlines()
     except Exception:
         return None
     in_term = in_vols = False
     backend = None
-    for line in lines:
+    vols = []
+    pair = re.compile(r"[\"']?(/[^:\"',\]\s]+):(/[^:\"',\]\s]+?)(?::r[ow])?[\"']?\s*$")
+    for raw in lines:
+        line = raw.split(" #", 1)[0].rstrip() if not raw.lstrip().startswith("#") else ""
+        if not line.strip():
+            continue
         if re.match(r"^\S", line):  # a new top-level key
-            in_term = line.split("#", 1)[0].strip() == "terminal:"
+            in_term = line.strip() == "terminal:"
             in_vols = False
             continue
         if not in_term:
             continue
-        m = re.match(r"^\s{2}backend:\s*[\"']?([\w-]+)", line)
+        m = re.match(r"^\s+backend:\s*[\"']?([\w-]+)", line)
         if m:
             backend = m.group(1)
-        if re.match(r"^\s{2}docker_volumes:\s*(#.*)?$", line):
-            in_vols = True
+            in_vols = False
+            continue
+        m = re.match(r"^\s+docker_volumes:\s*(.*)$", line)
+        if m:
+            rest = m.group(1).strip()
+            if rest.startswith("["):
+                for item in rest.strip("[]").split(","):
+                    mm = pair.match(item.strip())
+                    if mm:
+                        vols.append((mm.group(1), mm.group(2)))
+                in_vols = False
+            else:
+                in_vols = True
             continue
         if in_vols:
-            m = re.match(r"^\s+-\s*[\"']?(/[^:\"']+):(/[^:\"']+?)(?::r[ow])?[\"']?\s*(#.*)?$", line)
-            if m and backend == "docker":
-                return m.group(1).rstrip("/"), m.group(2).rstrip("/")
-            if re.match(r"^\s{2}\S", line):
-                in_vols = False
-    return None
+            m = re.match(r"^\s+-\s*(.+)$", line)
+            if m:
+                mm = pair.match(m.group(1).strip())
+                if mm:
+                    vols.append((mm.group(1), mm.group(2)))
+                continue
+            in_vols = False
+    if backend != "docker" or not vols:
+        return None
+    return vols[0][0].rstrip("/"), vols[0][1].rstrip("/")
 
 
 def load_settings(home: Optional[Path] = None, need_secrets: bool = True) -> dict:
@@ -574,16 +595,28 @@ class Bridge:
 
     def fetch_remote_brd(self, repo: str) -> Optional[str]:
         """docs/BRD.md from GitHub through the gh CLI (already logged in on the VM). None when it is not there."""
-        gh = shutil.which("gh")
-        if not gh or not REPO_RE.fullmatch(repo):
+        gh = shutil.which("gh") or next((g for g in ("/usr/bin/gh", "/usr/local/bin/gh", str(Path.home() / ".local/bin/gh"))
+                                         if Path(g).is_file()), None)
+        if not gh:
+            log("the gh command was not found, so the BRD cannot be read from GitHub")
             return None
+        if not REPO_RE.fullmatch(repo):
+            return None
+        env = dict(os.environ)
+        tok = read_env_file(hermes_home() / ".env")
+        for k in ("GH_TOKEN", "GITHUB_TOKEN"):  # the agents' token lives in ~/.hermes/.env, not in this service's env
+            if tok.get(k) and not env.get(k):
+                env[k] = tok[k]
         try:
             r = subprocess.run([gh, "api", f"repos/{repo}/contents/docs/BRD.md", "-H", "Accept: application/vnd.github.raw"],
-                               capture_output=True, text=True, timeout=25)
+                               capture_output=True, text=True, timeout=25, env=env)
         except Exception as e:
             log("could not ask GitHub for the BRD:", e)
             return None
-        return r.stdout if r.returncode == 0 and r.stdout.strip() else None
+        if r.returncode != 0:
+            log(f"could not read docs/BRD.md of {repo} from GitHub:", clip((r.stderr or r.stdout or "").strip(), 200))
+            return None
+        return r.stdout if r.stdout.strip() else None
 
     def read_brd(self, P: dict) -> Optional[str]:
         text = None

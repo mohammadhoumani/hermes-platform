@@ -757,6 +757,19 @@ class TestHelpers(unittest.TestCase):
         (d / "config.yaml").write_text(self.DOCKER_CFG.replace('backend: "docker"', 'backend: "local"'))
         self.assertIsNone(pb.docker_workspace_mount(d / "config.yaml"))
         self.assertIsNone(pb.docker_workspace_mount(d / "missing.yaml"))
+        want = ("/home/ubuntu/hermes-work", "/workspace/projects")
+        for cfg in (
+            # inline list, volumes before backend
+            'terminal:\n  docker_volumes: ["/home/ubuntu/hermes-work:/workspace/projects"]\n  backend: docker\n',
+            # unquoted block list with a :rw suffix and a comment
+            'terminal:\n  backend: docker  # run in a box\n  docker_volumes:\n  - /home/ubuntu/hermes-work:/workspace/projects:rw\n',
+            # single quotes, a commented-out volume first
+            "terminal:\n  backend: 'docker'\n  docker_volumes:\n    # - /x:/y\n    - '/home/ubuntu/hermes-work/:/workspace/projects/'\n",
+        ):
+            (d / "config.yaml").write_text(cfg)
+            self.assertEqual(pb.docker_workspace_mount(d / "config.yaml"), want, cfg)
+        (d / "config.yaml").write_text('terminal:\n  backend: docker\n  docker_volumes: []\n')
+        self.assertIsNone(pb.docker_workspace_mount(d / "config.yaml"))
 
     def test_docker_workspaces_are_used_by_the_bridge(self):
         home = Path(tempfile.mkdtemp(prefix="hp-home-"))
